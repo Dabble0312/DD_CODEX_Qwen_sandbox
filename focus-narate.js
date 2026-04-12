@@ -80,12 +80,16 @@ function runNarratorEngine() {
     var script      = _buildRevealScript(history, burst, recentBurst);
 
     // Record the reveal moment even if narrator is muted/off.
+    // Note: decision metadata (userDirection, userTargetPrice, actualPrice, delta, isCorrect)
+    // is now captured in scorePendingPrediction() in focus-core.js.
     try {
         if (window.sessionReport && Array.isArray(window.sessionReport.reveals)) {
-            var entry = { step: window.sessionReport.reveals.length + 1, image: null, script: script };
-            window.sessionReport.reveals.push(entry);
-            if (typeof window.captureSessionMoment === 'function') {
-                window.captureSessionMoment().then(function (img) { entry.image = img; });
+            var lastEntry = window.sessionReport.reveals[window.sessionReport.reveals.length - 1];
+            if (lastEntry) {
+                lastEntry.script = script;
+                if (typeof window.captureSessionMoment === 'function') {
+                    window.captureSessionMoment().then(function (img) { lastEntry.image = img; });
+                }
             }
         }
     } catch (err) {

@@ -401,7 +401,7 @@ function startAutoReveal() {
             setButtonState("guess");
             showStatus("What happens next?");
 
-             // --- ADD THE NARRATOR TRIGGER HERE ---
+            // --- ADD THE NARRATOR TRIGGER HERE ---
         if (window.runNarratorEngine) {
             runNarratorEngine();
         }
@@ -424,6 +424,24 @@ function startAutoReveal() {
 
         if (pendingPrediction && pendingPrediction.candleIndex === thisIndex) {
             scorePendingPrediction();
+        } else {
+            // Capture chart snapshot for non-scoring reveals (continuation candles in a burst)
+            if (sessionReport && Array.isArray(sessionReport.reveals)) {
+                const revealEntry = {
+                    step:          sessionReport.reveals.length + 1,
+                    userDirection: null,
+                    userTargetPrice: null,
+                    actualPrice:   candle.close,
+                    delta:         null,
+                    isCorrect:     null,
+                    image:         null,
+                    script:        null,
+                };
+                sessionReport.reveals.push(revealEntry);
+                if (typeof window.captureSessionMoment === 'function') {
+                    window.captureSessionMoment().then(function (img) { revealEntry.image = img; });
+                }
+            }
         }
 
         setTimeout(revealNext, REVEAL_SPEED_MS);
@@ -495,6 +513,27 @@ function scorePendingPrediction() {
     const predictedCandle = futureCandles[candleIndex];
     const priceWentUp     = predictedCandle.close > baseClose;
     const correct         = (guess === 'up' && priceWentUp) || (guess === 'down' && !priceWentUp);
+
+    // ── Capture decision to session report (per reveal)
+    if (sessionReport && Array.isArray(sessionReport.reveals)) {
+        const actualPrice = predictedCandle.close;
+        const hasTarget   = !isNaN(targetPrice) && targetPrice > 0;
+        const delta       = hasTarget ? (actualPrice - targetPrice) : null;
+        const revealEntry = {
+            step:          sessionReport.reveals.length + 1,
+            userDirection: guess,
+            userTargetPrice: hasTarget ? targetPrice : null,
+            actualPrice:   actualPrice,
+            delta:         delta,
+            isCorrect:     correct,
+            image:         null,
+            script:        null,
+        };
+        sessionReport.reveals.push(revealEntry);
+        if (typeof window.captureSessionMoment === 'function') {
+            window.captureSessionMoment().then(function (img) { revealEntry.image = img; });
+        }
+    }
 
     if (correct) {
         correctCount++;
