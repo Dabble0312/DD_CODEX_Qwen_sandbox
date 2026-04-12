@@ -81,25 +81,36 @@ function runNarratorEngine() {
     var script      = _buildRevealScript(history, burst, recentBurst);
 
     // Record the reveal moment even if narrator is muted/off.
-    // Note: decision metadata (userDirection, userTargetPrice, actualPrice, delta, isCorrect)
-    // is now captured in scorePendingPrediction() in focus-core.js.
     try {
         if (window.sessionReport && Array.isArray(window.sessionReport.reveals)) {
-            // Find the most recent reveal entry without a script and attach it
-            var lastEntry = null;
-            for (var i = window.sessionReport.reveals.length - 1; i >= 0; i--) {
-                var entry = window.sessionReport.reveals[i];
-                if (!entry.script) {
-                    lastEntry = entry;
-                    break;
+            var burstEndIndex = window._pendingBurstEndIndex;
+            var targetEntry   = null;
+
+            // Prefer the entry whose candleIndex matches the pending burst end (scored candle)
+            if (burstEndIndex != null) {
+                for (var i = 0; i < window.sessionReport.reveals.length; i++) {
+                    if (window.sessionReport.reveals[i].candleIndex === burstEndIndex) {
+                        targetEntry = window.sessionReport.reveals[i];
+                        break;
+                    }
                 }
             }
-            if (lastEntry) {
-                lastEntry.script = script;
-                if (typeof window.captureSessionMoment === 'function') {
-                    window.captureSessionMoment().then(function (img) { lastEntry.image = img; });
+
+            // Fallback: last entry without a script
+            if (!targetEntry) {
+                for (var j = window.sessionReport.reveals.length - 1; j >= 0; j--) {
+                    if (!window.sessionReport.reveals[j].script) {
+                        targetEntry = window.sessionReport.reveals[j];
+                        break;
+                    }
                 }
             }
+
+            if (targetEntry) {
+                targetEntry.script = script;
+            }
+
+            window._pendingBurstEndIndex = null;
         }
     } catch (err) {
         console.warn('Reveal capture failed:', err);
