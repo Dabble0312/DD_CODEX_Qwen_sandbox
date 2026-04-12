@@ -1,0 +1,260 @@
+/* focus.css — Focus Mode specific styles.
+   Loaded after tokens.css and styles.css in focus.html. */
+
+/* ── Focus Mode HUD ── */
+.focus-hud {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+}
+
+.focus-status {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    min-height: 24px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+/* ── Stats pills ── */
+.stats-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.stat-pill {
+    background: #f1f5f9;
+    border-radius: 99px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--color-slate);
+}
+
+.stat-pill span {
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+/* ── Dimmed button state ── */
+button.btn-dim {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* ── Price target row ── */
+.price-target-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.price-target-input {
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.1);
+    font-size: 15px;
+    width: 140px;
+    outline: none;
+}
+
+.price-target-input.btn-dim {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.price-target-label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+/* ── Reveal count selector ── */
+.reveal-count-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.reveal-count-row label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.reveal-count-select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.1);
+    font-size: 13px;
+    color: var(--color-text-primary);
+    background: var(--color-bg);
+    cursor: pointer;
+}
+
+/* ── Candle info panel ── */
+#candleInfo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    min-height: 36px;
+    font-size: 13px;
+}
+
+.candle-info-empty {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    font-style: italic;
+}
+
+.candle-info-date  { font-weight: 600; color: var(--color-text-primary); font-size: 12px; }
+.candle-info-dir   { font-size: 14px; font-weight: 700; }
+.candle-info-item  { font-size: 13px; color: var(--color-slate); }
+.candle-info-label { font-size: 10px; font-weight: 700; color: var(--color-text-tertiary); margin-right: 2px; text-transform: uppercase; }
+
+/* ── Price feedback panel ── */
+#priceFeedback {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    min-height: 36px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-slate);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+/* ── Stats panel header + summary toggle ── */
+.stats-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.stats-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+}
+
+.summary-toggle-btn {
+    background: none;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 99px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-indigo);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.15s;
+}
+
+.summary-toggle-btn:hover { background: #eef2ff; }
+
+/* ── Summary panel ── */
+#summaryPanel {
+    background: var(--color-bg);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-left: 3px solid var(--color-indigo);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--color-slate);
+}
+
+#summaryPanel.hidden { display: none; }
+
+/* ── Button variants ── */
+.reveal-btn          { background: var(--color-indigo); color: white; }
+.btn-patterns        { background: var(--color-text-primary); color: white; }
+.btn-explain-patterns { background: var(--color-teal); color: white; }
+
+.button-row {
+    display: flex;
+    align-items: center;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ── Pattern panel ── */
+#patternPanel {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-top: 8px;
+    font-size: 13px;
+}
+
+#patternPanel.hidden { display: none; }
+
+.pattern-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 3px 4px 3px 0;
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.pattern-none {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    font-style: italic;
+}
+
+/* ── Pattern explanation panel ── */
+#patternExplainPanel {
+    background: var(--color-bg);
+    border: 1px solid rgba(15,118,110,0.2);
+    border-left: 3px solid var(--color-teal);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--color-slate);
+}
+
+#patternExplainPanel.hidden { display: none; }
+
+.pattern-explain-item  { margin-bottom: 10px; }
+.pattern-explain-label { font-weight: 700; color: var(--color-text-primary); margin-bottom: 3px; }
+
+
+.btn-narrator {
+    background: var(--color-slate);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-narrator.active {
+    background: #a855f7; /* Purple glow when ON */
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+}
