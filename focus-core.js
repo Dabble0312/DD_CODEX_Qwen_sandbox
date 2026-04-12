@@ -481,7 +481,6 @@ function startAutoReveal() {
 ----------------------------------------- */
 function handleGuess(guess) {
     if (!sessionActive || !awaitingGuess) return;
-    awaitingGuess = false;
 
     if (!futureCandles[revealIndex]) {
         endSession("complete");
@@ -490,23 +489,36 @@ function handleGuess(guess) {
 
     const priceInput  = document.getElementById('priceTarget');
     const targetValue = priceInput ? parseFloat(priceInput.value) : NaN;
-    if (priceInput) priceInput.value = '';
 
     const baselineClose = revealedSoFar.length > 0
         ? revealedSoFar[revealedSoFar.length - 1].close
         : allCandles[allCandles.length - 1].close;
+
+    // ── Validate target price — required input
+    if (isNaN(targetValue) || targetValue <= 0) {
+        showStatus("Enter a target price before revealing.");
+        return;   // keep awaitingGuess = true
+    }
+
+    // ── Derive direction from target vs current close
+    const derivedDirection = targetValue > baselineClose ? 'up' : 'down';
+    guess = derivedDirection;
+
+    awaitingGuess = false;
+    if (priceInput) priceInput.value = '';
+
     const finalClose = futureCandles.length > 0
         ? futureCandles[futureCandles.length - 1].close
         : baselineClose;
-    const hasTarget = !isNaN(targetValue) && targetValue > 0;
+    const hasTarget = true;   // already validated above
 
     if (!sessionReport) initSessionReport();
     if (sessionReport) {
-        sessionReport.prediction.guess        = guess;
-        sessionReport.prediction.target       = hasTarget ? targetValue : null;
-        sessionReport.prediction.actualPrice  = finalClose;
-        sessionReport.prediction.isCorrect    = (guess === 'up' && finalClose > baselineClose) || (guess === 'down' && !(finalClose > baselineClose));
-        sessionReport.prediction.accuracyDelta = hasTarget ? Math.abs(targetValue - finalClose) : null;
+        sessionReport.prediction.guess         = derivedDirection;
+        sessionReport.prediction.target        = targetValue;
+        sessionReport.prediction.actualPrice   = finalClose;
+        sessionReport.prediction.isCorrect     = (derivedDirection === 'up' && finalClose > baselineClose) || (derivedDirection === 'down' && !(finalClose > baselineClose));
+        sessionReport.prediction.accuracyDelta = Math.abs(targetValue - finalClose);
         console.log('[SessionReport]', sessionReport);
     }
 
@@ -543,8 +555,7 @@ function scorePendingPrediction() {
     // ── Capture decision to session report (per reveal)
     if (sessionReport && Array.isArray(sessionReport.reveals)) {
         const actualPrice = predictedCandle.close;
-        const hasTarget   = !isNaN(targetPrice) && targetPrice > 0;
-        const delta       = hasTarget ? (actualPrice - targetPrice) : null;
+        const delta       = actualPrice - targetPrice;   // targetPrice always present now
         
         // Find the reveal entry for this candleIndex, or create a new one
         let revealEntry = sessionReport.reveals.find(function(r) { 
@@ -556,7 +567,7 @@ function scorePendingPrediction() {
                 candleIndex:     candleIndex,
                 step:            sessionReport.reveals.length + 1,
                 userDirection:   guess,
-                userTargetPrice: hasTarget ? targetPrice : null,
+                userTargetPrice: targetPrice,
                 actualPrice:     actualPrice,
                 delta:           delta,
                 isCorrect:       correct,
@@ -565,9 +576,8 @@ function scorePendingPrediction() {
             };
             sessionReport.reveals.push(revealEntry);
         } else {
-            // Update existing entry with guess/price data
             revealEntry.userDirection   = guess;
-            revealEntry.userTargetPrice = hasTarget ? targetPrice : null;
+            revealEntry.userTargetPrice = targetPrice;
             revealEntry.actualPrice     = actualPrice;
             revealEntry.delta           = delta;
             revealEntry.isCorrect       = correct;
@@ -588,9 +598,8 @@ function scorePendingPrediction() {
         showWSBPopup(false);
     }
 
-    // ── Price target feedback
-    const hasTarget = !isNaN(targetPrice) && targetPrice > 0;
-    if (hasTarget) {
+    // ── Price target feedback (targetPrice always present)
+    {
         const actual  = predictedCandle.close;
         const diff    = actual - targetPrice;
         const diffPct = ((Math.abs(diff) / actual) * 100).toFixed(1);
@@ -664,13 +673,9 @@ function endSession(reason) {
 }
 
 /* -----------------------------------------
-   8. KEYBOARD SHORTCUTS (Phase 5)
-   ArrowUp = UP guess, ArrowDown = DOWN guess
+   8. KEYBOARD SHORTCUTS
+   (Up/Down direction is now derived from target price — no key shortcuts needed)
 ----------------------------------------- */
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowUp')   { e.preventDefault(); handleGuess('up');   }
-    if (e.key === 'ArrowDown') { e.preventDefault(); handleGuess('down'); }
-});
 
 /* -----------------------------------------
    9. BOOT
@@ -681,10 +686,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── Bind button listeners
     const el = id => document.getElementById(id);
-    if (el('narratorBtn')) el('narratorBtn').addEventListener('click', toggleNarrator);
+    if (el('narratorBtn'))             el('narratorBtn').addEventListener('click', toggleNarrator);
     if (el('revealBtn'))               el('revealBtn').addEventListener('click', startAutoReveal);
-    if (el('upBtn'))                   el('upBtn').addEventListener('click', () => handleGuess('up'));
-    if (el('downBtn'))                 el('downBtn').addEventListener('click', () => handleGuess('down'));
     if (el('togglePatternsBtn'))       el('togglePatternsBtn').addEventListener('click', togglePatterns);
     if (el('togglePatternExplainBtn')) el('togglePatternExplainBtn').addEventListener('click', togglePatternExplain);
     if (el('summaryToggleBtn'))        el('summaryToggleBtn').addEventListener('click', toggleSummary);
