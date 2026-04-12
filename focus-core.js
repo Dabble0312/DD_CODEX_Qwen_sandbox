@@ -101,12 +101,16 @@ function escapeHtml(str) {
 }
 
 function openSessionReport() {
-    if (!window.sessionReport) {
+    if (!window.finalSessionReport) {
+        // Fallback: if session ended but finalSessionReport wasn't set yet, build it now
+        buildFinalSessionReport();
+    }
+    if (!window.finalSessionReport) {
         alert('No session report found yet.');
         return;
     }
 
-    const r       = window.sessionReport;
+    const r       = window.finalSessionReport;
     const reveals = Array.isArray(r.reveals) ? r.reveals : [];
 
     // ── Only scored bursts (entries that have a user prediction attached)
@@ -118,6 +122,9 @@ function openSessionReport() {
 
     // ── History commentary
     const historyScript = (r.history && r.history.script) || null;
+
+    // ── Cognitive statements (pre-built by buildFinalSessionReport)
+    const cogStmt       = (r.cognitiveStatements) || null;
 
     // ── Per-burst cards
     const burstCardsHtml = bursts.map((burst, idx) => {
@@ -209,6 +216,14 @@ function openSessionReport() {
     .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 28px; }
     .history-text { font-size: 14px; line-height: 1.7; color: var(--text); }
 
+    /* ── Cognitive analysis */
+    .cognitive-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
+    .cognitive-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .cognitive-title { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
+    .cognitive-text { font-size: 14px; line-height: 1.75; color: #cbd5e1; }
+    @media (max-width: 560px) { .cognitive-grid { grid-template-columns: 1fr; } }
+    @media print { .cognitive-card { background: #fff; border: 1px solid #ddd; } .cognitive-text { color: #1e293b; } }
+
     /* ── Burst screenshot */
     .burst-shot { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); background: #0b1222; display: block; margin-bottom: 14px; }
     .shot-missing { padding: 12px; border-radius: 8px; border: 1px dashed var(--border); color: var(--muted); font-size: 12px; font-style: italic; margin-bottom: 14px; }
@@ -276,6 +291,19 @@ function openSessionReport() {
       <div class="summary-lbl">Accuracy</div>
     </div>
   </div>
+
+  ${cogStmt ? `
+  <div class="section-title">Cognitive analysis</div>
+  <div class="cognitive-grid">
+    <div class="cognitive-card">
+      <div class="cognitive-title">Bias</div>
+      <div class="cognitive-text">${escapeHtml(cogStmt.biasSummary)}</div>
+    </div>
+    <div class="cognitive-card">
+      <div class="cognitive-title">Calibration</div>
+      <div class="cognitive-text">${escapeHtml(cogStmt.calibrationSummary)}</div>
+    </div>
+  </div>` : ''}
 
   ${historyScript ? `
   <div class="section-title">Market backdrop</div>
@@ -702,9 +730,114 @@ function scorePendingPrediction() {
 }
 
 /* -----------------------------------------
+   6c. BUILD FINAL SESSION REPORT
+   Silent. No popup. No download.
+   Computes cognitiveSnapshot + cognitiveStatements,
+   attaches them to sessionReport, and stores the
+   complete object in window.finalSessionReport.
+   Called automatically at the top of endSession().
+----------------------------------------- */
+function buildFinalSessionReport() {
+    if (!sessionReport) return;
+
+    const reveals = Array.isArray(sessionReport.reveals) ? sessionReport.reveals : [];
+    const bursts  = reveals.filter(b => b && b.userTargetPrice != null && b.actualPrice != null && b.delta != null);
+
+    if (bursts.length === 0) {
+        // No scored bursts — attach empty blocks and store
+        sessionReport.cognitiveSnapshot   = null;
+        sessionReport.cognitiveStatements = null;
+        window.finalSessionReport = JSON.parse(JSON.stringify(sessionReport));
+        return;
+    }
+
+    // ── Raw aggregates
+    const totalAbsDelta  = bursts.reduce((s, b) => s + Math.abs(b.delta), 0);
+    const totalActual    = bursts.reduce((s, b) => s + b.actualPrice, 0);
+    const sumDelta       = bursts.reduce((s, b) => s + b.delta, 0);
+    const avgAbsDelta    = totalAbsDelta / bursts.length;
+    const avgActual      = totalActual   / bursts.length;
+    const meanDelta      = sumDelta      / bursts.length;
+    const avgAbsDeltaPct = (avgAbsDelta  / avgActual)  * 100;
+
+    // ── BIAS ─────────────────────────────────────────────
+
+    // directionalExpectation — userDirection encodes targetPrice vs baseClose
+    const positiveCount = bursts.filter(b => b.userDirection === 'up').length;
+    const directionalExpectation = positiveCount >= (bursts.length - positiveCount)
+        ? 'Positive' : 'Negative';
+
+    // optimismPessimism — delta < 0 means targetPrice > actualPrice = Optimistic
+    const optimisticCount = bursts.filter(b => b.delta < 0).length;
+    const pessimisticCount = bursts.length - optimisticCount;
+    let optimismPessimism;
+    if (optimisticCount === pessimisticCount) optimismPessimism = 'Neutral';
+    else if (optimisticCount > pessimisticCount) optimismPessimism = 'Optimistic';
+    else optimismPessimism = 'Pessimistic';
+
+    // overshootUndershoot — average pct deviation across bursts
+    const avgPctDev = bursts.reduce((s, b) => s + (Math.abs(b.delta) / b.actualPrice * 100), 0) / bursts.length;
+    let overshootUndershoot;
+    if      (avgPctDev < 1) overshootUndershoot = 'Accurate';
+    else if (avgPctDev < 3) overshootUndershoot = 'Mild Overshoot/Undershoot';
+    else if (avgPctDev < 7) overshootUndershoot = 'Moderate Overshoot/Undershoot';
+    else                    overshootUndershoot = 'Strong Overshoot/Undershoot';
+
+    // ── CALIBRATION ──────────────────────────────────────
+
+    // magnitudeCalibration — avg abs(delta) as % of avg actual price
+    let magnitudeCalibration;
+    if      (avgAbsDeltaPct < 2) magnitudeCalibration = 'Tight';
+    else if (avgAbsDeltaPct < 5) magnitudeCalibration = 'Moderate';
+    else                         magnitudeCalibration = 'Loose';
+
+    // directionalCalibration — mean delta direction
+    let directionalCalibration;
+    if      (meanDelta < 0) directionalCalibration = 'Aimed Too High';
+    else if (meanDelta > 0) directionalCalibration = 'Aimed Too Low';
+    else                    directionalCalibration = 'Aligned';
+
+    // systematicBias — mean delta sign
+    let systematicBias;
+    if      (meanDelta < 0) systematicBias = 'Consistent Overshooter';
+    else if (meanDelta > 0) systematicBias = 'Consistent Undershooter';
+    else                    systematicBias = 'Balanced';
+
+    // ── ATTACH cognitiveSnapshot
+    sessionReport.cognitiveSnapshot = {
+        directionalExpectation,
+        optimismPessimism,
+        overshootUndershoot,
+        magnitudeCalibration,
+        directionalCalibration,
+        systematicBias,
+    };
+
+    // ── ATTACH cognitiveStatements
+    sessionReport.cognitiveStatements = {
+        biasSummary:
+            `The target reflected a ${directionalExpectation} expectation for the move. ` +
+            `The target was overall ${optimismPessimism} relative to the actual outcome. ` +
+            `The target showed a ${overshootUndershoot} tendency based on percentage deviation.`,
+
+        calibrationSummary:
+            `Calibration was ${magnitudeCalibration}, based on the average distance from actual price. ` +
+            `Directionally, the targets tended to be ${directionalCalibration}. ` +
+            `Across the session, the user showed a ${systematicBias} pattern.`,
+    };
+
+    // ── STORE as single source of truth (deep copy so live mutations don't corrupt it)
+    window.finalSessionReport = JSON.parse(JSON.stringify(sessionReport));
+}
+window.buildFinalSessionReport = buildFinalSessionReport;
+
+/* -----------------------------------------
    7. END SESSION
 ----------------------------------------- */
 function endSession(reason) {
+    // ── Freeze and enrich the report before any UI changes
+    buildFinalSessionReport();
+
     sessionActive    = false;
     autoRevealActive = false;
     awaitingGuess    = false;
