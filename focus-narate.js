@@ -63,6 +63,7 @@ function toggleNarrator() {
         window.speechSynthesis.cancel();
     }
 }
+window.toggleNarrator = toggleNarrator;
 
 function runNarratorEngine() {
     if (typeof getVisiblePatterns === 'function') {
@@ -84,7 +85,15 @@ function runNarratorEngine() {
     // is now captured in scorePendingPrediction() in focus-core.js.
     try {
         if (window.sessionReport && Array.isArray(window.sessionReport.reveals)) {
-            var lastEntry = window.sessionReport.reveals[window.sessionReport.reveals.length - 1];
+            // Find the most recent reveal entry without a script and attach it
+            var lastEntry = null;
+            for (var i = window.sessionReport.reveals.length - 1; i >= 0; i--) {
+                var entry = window.sessionReport.reveals[i];
+                if (!entry.script) {
+                    lastEntry = entry;
+                    break;
+                }
+            }
             if (lastEntry) {
                 lastEntry.script = script;
                 if (typeof window.captureSessionMoment === 'function') {
@@ -98,6 +107,7 @@ function runNarratorEngine() {
 
     if (narratorActive) _speak(script);
 }
+window.runNarratorEngine = runNarratorEngine;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HISTORY NARRATOR

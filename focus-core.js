@@ -117,10 +117,27 @@ function openSessionReport() {
         const img = rev && rev.image ? `<img class="shot" src="${rev.image}" />` : `<div class="missing">Screenshot pending / missing.</div>`;
         const script = escapeHtml((rev && rev.script) || '');
         const step = (rev && (rev.step || rev.step === 0)) ? rev.step : (idx + 1);
+        const direction = rev && rev.userDirection ? escapeHtml(rev.userDirection) : '';
+        const target = rev && rev.userTargetPrice != null ? escapeHtml(rev.userTargetPrice) : '';
+        const actual = rev && rev.actualPrice != null ? escapeHtml(rev.actualPrice) : '';
+        const delta = rev && rev.delta != null ? escapeHtml(rev.delta) : '';
+        const correct = rev && rev.isCorrect != null ? (rev.isCorrect ? 'Yes' : 'No') : '';
+        
+        const guessInfo = direction || target || actual 
+            ? `<div class="guess-info">
+                <div class="kv"><span class="k">Direction</span><span class="v">${direction}</span></div>
+                ${target ? `<div class="kv"><span class="k">Target</span><span class="v">${target}</span></div>` : ''}
+                ${actual ? `<div class="kv"><span class="k">Actual</span><span class="v">${actual}</span></div>` : ''}
+                ${delta ? `<div class="kv"><span class="k">Delta</span><span class="v">${delta}</span></div>` : ''}
+                ${correct ? `<div class="kv"><span class="k">Correct</span><span class="v">${correct}</span></div>` : ''}
+               </div>` 
+            : '';
+        
         return `
             <section class="card">
                 <h3>Reveal Burst ${escapeHtml(step)}</h3>
                 ${img}
+                ${guessInfo}
                 <pre class="script">${script || '(no script captured)'}</pre>
             </section>
         `;
@@ -161,6 +178,7 @@ function openSessionReport() {
       .shot { width: 100%; height: auto; border-radius: 10px; border:1px solid var(--line); background:#0b1222; }
       .missing { padding: 12px; border-radius: 10px; border:1px dashed var(--line); color: var(--muted); }
       .script { white-space: pre-wrap; margin: 10px 0 0; padding: 10px; border-radius: 10px; border:1px solid var(--line); background:#0f172a; color: var(--text); font-size: 12px; line-height: 1.5; }
+      .guess-info { margin: 10px 0; padding: 10px; border-radius: 10px; border:1px solid var(--line); background:#0f172a; }
       .kv { display:flex; justify-content:space-between; gap:12px; padding: 6px 0; border-bottom: 1px solid rgba(31,41,55,0.7); }
       .kv:last-child { border-bottom: none; }
       .k { color: var(--muted); }
@@ -401,13 +419,12 @@ function startAutoReveal() {
             setButtonState("guess");
             showStatus("What happens next?");
 
-            // --- ADD THE NARRATOR TRIGGER HERE ---
-        if (window.runNarratorEngine) {
-            runNarratorEngine();
-        }
-        // -------------------------------------
+            // --- Trigger narrator engine (captures script even if muted) ---
+            if (typeof runNarratorEngine === 'function') {
+                runNarratorEngine();
+            }
+            // ----------------------------------------------------------------
 
-      
             return;
         }
 
@@ -427,17 +444,26 @@ function startAutoReveal() {
         } else {
             // Capture chart snapshot for non-scoring reveals (continuation candles in a burst)
             if (sessionReport && Array.isArray(sessionReport.reveals)) {
-                const revealEntry = {
-                    step:          sessionReport.reveals.length + 1,
-                    userDirection: null,
-                    userTargetPrice: null,
-                    actualPrice:   candle.close,
-                    delta:         null,
-                    isCorrect:     null,
-                    image:         null,
-                    script:        null,
-                };
-                sessionReport.reveals.push(revealEntry);
+                // Check if an entry for this candle already exists
+                let revealEntry = sessionReport.reveals.find(function(r) { 
+                    return r.candleIndex === thisIndex; 
+                });
+                
+                if (!revealEntry) {
+                    revealEntry = {
+                        candleIndex:     thisIndex,
+                        step:            sessionReport.reveals.length + 1,
+                        userDirection:   null,
+                        userTargetPrice: null,
+                        actualPrice:     candle.close,
+                        delta:           null,
+                        isCorrect:       null,
+                        image:           null,
+                        script:          null,
+                    };
+                    sessionReport.reveals.push(revealEntry);
+                }
+                
                 if (typeof window.captureSessionMoment === 'function') {
                     window.captureSessionMoment().then(function (img) { revealEntry.image = img; });
                 }
@@ -519,17 +545,34 @@ function scorePendingPrediction() {
         const actualPrice = predictedCandle.close;
         const hasTarget   = !isNaN(targetPrice) && targetPrice > 0;
         const delta       = hasTarget ? (actualPrice - targetPrice) : null;
-        const revealEntry = {
-            step:          sessionReport.reveals.length + 1,
-            userDirection: guess,
-            userTargetPrice: hasTarget ? targetPrice : null,
-            actualPrice:   actualPrice,
-            delta:         delta,
-            isCorrect:     correct,
-            image:         null,
-            script:        null,
-        };
-        sessionReport.reveals.push(revealEntry);
+        
+        // Find the reveal entry for this candleIndex, or create a new one
+        let revealEntry = sessionReport.reveals.find(function(r) { 
+            return r.candleIndex === candleIndex; 
+        });
+        
+        if (!revealEntry) {
+            revealEntry = {
+                candleIndex:     candleIndex,
+                step:            sessionReport.reveals.length + 1,
+                userDirection:   guess,
+                userTargetPrice: hasTarget ? targetPrice : null,
+                actualPrice:     actualPrice,
+                delta:           delta,
+                isCorrect:       correct,
+                image:           null,
+                script:          null,
+            };
+            sessionReport.reveals.push(revealEntry);
+        } else {
+            // Update existing entry with guess/price data
+            revealEntry.userDirection   = guess;
+            revealEntry.userTargetPrice = hasTarget ? targetPrice : null;
+            revealEntry.actualPrice     = actualPrice;
+            revealEntry.delta           = delta;
+            revealEntry.isCorrect       = correct;
+        }
+        
         if (typeof window.captureSessionMoment === 'function') {
             window.captureSessionMoment().then(function (img) { revealEntry.image = img; });
         }
