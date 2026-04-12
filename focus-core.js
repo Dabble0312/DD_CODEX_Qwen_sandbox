@@ -106,143 +106,209 @@ function openSessionReport() {
         return;
     }
 
-    const r = window.sessionReport;
+    const r       = window.sessionReport;
     const reveals = Array.isArray(r.reveals) ? r.reveals : [];
-    const pred = r.prediction || {};
 
-    const historyImg = r.history && r.history.image ? `<img class="shot" src="${r.history.image}" />` : `<div class="missing">No screenshot captured.</div>`;
-    const historyScript = r.history && r.history.script ? escapeHtml(r.history.script) : '(no script captured)';
+    // ── Only scored bursts (entries that have a user prediction attached)
+    const bursts = reveals.filter(rev => rev && rev.userTargetPrice != null);
 
-    const revealHtml = reveals.map((rev, idx) => {
-        const img = rev && rev.image ? `<img class="shot" src="${rev.image}" />` : `<div class="missing">Screenshot pending / missing.</div>`;
-        const script = escapeHtml((rev && rev.script) || '');
-        const step = (rev && (rev.step || rev.step === 0)) ? rev.step : (idx + 1);
-        const direction = rev && rev.userDirection ? escapeHtml(rev.userDirection) : '';
-        const target = rev && rev.userTargetPrice != null ? escapeHtml(rev.userTargetPrice) : '';
-        const actual = rev && rev.actualPrice != null ? escapeHtml(rev.actualPrice) : '';
-        const delta = rev && rev.delta != null ? escapeHtml(rev.delta) : '';
-        const correct = rev && rev.isCorrect != null ? (rev.isCorrect ? 'Yes' : 'No') : '';
-        
-        const guessInfo = direction || target || actual 
-            ? `<div class="guess-info">
-                <div class="kv"><span class="k">Direction</span><span class="v">${direction}</span></div>
-                ${target ? `<div class="kv"><span class="k">Target</span><span class="v">${target}</span></div>` : ''}
-                ${actual ? `<div class="kv"><span class="k">Actual</span><span class="v">${actual}</span></div>` : ''}
-                ${delta ? `<div class="kv"><span class="k">Delta</span><span class="v">${delta}</span></div>` : ''}
-                ${correct ? `<div class="kv"><span class="k">Correct</span><span class="v">${correct}</span></div>` : ''}
-               </div>` 
-            : '';
-        
+    const totalBursts = bursts.length;
+    const correct     = bursts.filter(b => b.isCorrect).length;
+    const accuracy    = totalBursts > 0 ? Math.round((correct / totalBursts) * 100) : 0;
+
+    // ── History commentary
+    const historyScript = (r.history && r.history.script) || null;
+
+    // ── Per-burst cards
+    const burstCardsHtml = bursts.map((burst, idx) => {
+        const burstNum    = idx + 1;
+        const target      = burst.userTargetPrice != null ? (+burst.userTargetPrice).toFixed(2) : '—';
+        const actual      = burst.actualPrice      != null ? (+burst.actualPrice).toFixed(2)      : '—';
+        const delta       = burst.delta            != null ? (+burst.delta).toFixed(2)             : '—';
+        const isCorrect   = burst.isCorrect;
+        const direction   = burst.userDirection || '—';
+
+        const deltaNum    = burst.delta != null ? +burst.delta : null;
+        const deltaSign   = deltaNum != null ? (deltaNum >= 0 ? '+' : '') : '';
+        const deltaClass  = deltaNum == null ? '' : (deltaNum >= 0 ? 'positive' : 'negative');
+        const resultClass = isCorrect ? 'correct' : 'wrong';
+        const resultLabel = isCorrect ? '✓ Correct' : '✗ Incorrect';
+
+        const screenshot  = burst.image
+            ? `<img class="burst-shot" src="${burst.image}" />`
+            : `<div class="shot-missing">No screenshot captured for this burst.</div>`;
+
+        const commentary  = burst.script
+            ? `<div class="commentary">${escapeHtml(burst.script)}</div>`
+            : `<div class="commentary muted">No market commentary was captured for this burst.</div>`;
+
         return `
-            <section class="card">
-                <h3>Reveal Burst ${escapeHtml(step)}</h3>
-                ${img}
-                ${guessInfo}
-                <pre class="script">${script || '(no script captured)'}</pre>
-            </section>
-        `;
+        <section class="burst-card">
+            <div class="burst-header">
+                <span class="burst-label">Burst ${burstNum}</span>
+                <span class="result-badge ${resultClass}">${resultLabel}</span>
+            </div>
+            ${screenshot}
+            ${commentary}
+            <div class="price-row">
+                <div class="price-cell">
+                    <div class="price-label">Your Target</div>
+                    <div class="price-value">₹${target}</div>
+                </div>
+                <div class="price-cell">
+                    <div class="price-label">Actual Close</div>
+                    <div class="price-value">₹${actual}</div>
+                </div>
+                <div class="price-cell">
+                    <div class="price-label">Delta</div>
+                    <div class="price-value ${deltaClass}">${deltaSign}${delta}</div>
+                </div>
+                <div class="price-cell">
+                    <div class="price-label">Trend Called</div>
+                    <div class="price-value trend-${direction}">${direction.toUpperCase()}</div>
+                </div>
+            </div>
+        </section>`;
     }).join('\n');
-
-    const predBlock = `
-        <section class="card">
-            <h3>Prediction</h3>
-            <div class="kv"><span class="k">Guess</span><span class="v">${escapeHtml(pred.guess || '')}</span></div>
-            <div class="kv"><span class="k">Target</span><span class="v">${pred.target == null ? '' : escapeHtml(pred.target)}</span></div>
-            <div class="kv"><span class="k">Final Close</span><span class="v">${pred.actualPrice == null ? '' : escapeHtml(pred.actualPrice)}</span></div>
-            <div class="kv"><span class="k">Correct</span><span class="v">${escapeHtml(String(!!pred.isCorrect))}</span></div>
-            <div class="kv"><span class="k">Accuracy Delta</span><span class="v">${pred.accuracyDelta == null ? '' : escapeHtml(pred.accuracyDelta)}</span></div>
-        </section>
-    `;
 
     const html = `<!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Session Report</title>
-    <style>
-      :root { --bg:#0b0f19; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --line:#1f2937; }
-      * { box-sizing: border-box; }
-      body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-      .wrap { max-width: 980px; margin: 0 auto; }
-      header { display:flex; gap:12px; align-items:baseline; justify-content:space-between; margin-bottom: 16px; }
-      h1 { font-size: 20px; margin: 0; }
-      .meta { color: var(--muted); font-size: 12px; }
-      .actions { display:flex; gap:8px; }
-      button { border:1px solid var(--line); background:#0f172a; color:var(--text); padding:8px 10px; border-radius:10px; cursor:pointer; }
-      button:hover { background:#111c33; }
-      .grid { display:grid; gap:12px; }
-      .card { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
-      h2 { font-size: 16px; margin: 0 0 8px; }
-      h3 { font-size: 14px; margin: 0 0 8px; color: var(--text); }
-      .shot { width: 100%; height: auto; border-radius: 10px; border:1px solid var(--line); background:#0b1222; }
-      .missing { padding: 12px; border-radius: 10px; border:1px dashed var(--line); color: var(--muted); }
-      .script { white-space: pre-wrap; margin: 10px 0 0; padding: 10px; border-radius: 10px; border:1px solid var(--line); background:#0f172a; color: var(--text); font-size: 12px; line-height: 1.5; }
-      .guess-info { margin: 10px 0; padding: 10px; border-radius: 10px; border:1px solid var(--line); background:#0f172a; }
-      .kv { display:flex; justify-content:space-between; gap:12px; padding: 6px 0; border-bottom: 1px solid rgba(31,41,55,0.7); }
-      .kv:last-child { border-bottom: none; }
-      .k { color: var(--muted); }
-      @media print {
-        body { background: #fff; color: #000; padding: 0; }
-        .card { border:1px solid #ddd; background:#fff; }
-        .script { background:#f7f7f7; border:1px solid #ddd; color:#000; }
-        button { display:none; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <header>
-        <div>
-          <h1>Session Report</h1>
-          <div class="meta">Timestamp: ${escapeHtml(r.timestamp || '')} • Reveals: ${reveals.length}</div>
-        </div>
-        <div class="actions">
-          <button onclick="window.print()">Print / Save PDF</button>
-          <button onclick="downloadJson()">Download JSON</button>
-        </div>
-      </header>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DojiDash — Session Report</title>
+  <style>
+    :root {
+      --bg: #0b0f19; --surface: #111827; --border: #1f2937;
+      --text: #e5e7eb; --muted: #6b7280; --accent: #3b82f6;
+      --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 32px 24px; }
+    .wrap { max-width: 820px; margin: 0 auto; }
 
-      <div class="grid">
-        <section class="card">
-          <h2>History (Initial 50 Candles)</h2>
-          ${historyImg}
-          <pre class="script">${historyScript}</pre>
-        </section>
+    /* ── Header */
+    .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; gap: 16px; flex-wrap: wrap; }
+    .report-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .report-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .header-actions { display: flex; gap: 8px; }
+    .btn { border: 1px solid var(--border); background: #0f172a; color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .btn:hover { background: #1e293b; }
 
-        ${predBlock}
+    /* ── Summary bar */
+    .summary-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+    .summary-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+    .summary-num { font-size: 28px; font-weight: 700; line-height: 1; }
+    .summary-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .summary-num.green { color: var(--green); }
+    .summary-num.red   { color: var(--red); }
+    .summary-num.blue  { color: var(--accent); }
 
-        <section class="card">
-          <h2>Reveal Bursts</h2>
-          <div class="grid">
-            ${revealHtml || '<div class="missing">No reveal bursts recorded.</div>'}
-          </div>
-        </section>
-      </div>
+    /* ── History section */
+    .section-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 12px; }
+    .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 28px; }
+    .history-text { font-size: 14px; line-height: 1.7; color: var(--text); }
+
+    /* ── Burst screenshot */
+    .burst-shot { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); background: #0b1222; display: block; margin-bottom: 14px; }
+    .shot-missing { padding: 12px; border-radius: 8px; border: 1px dashed var(--border); color: var(--muted); font-size: 12px; font-style: italic; margin-bottom: 14px; }
+
+    /* ── Burst cards */
+    .bursts-grid { display: grid; gap: 16px; }
+    .burst-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .burst-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .burst-label { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .result-badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+    .result-badge.correct { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .result-badge.wrong   { background: rgba(239,68,68,0.12);  color: var(--red);   border: 1px solid rgba(239,68,68,0.25); }
+
+    .commentary { font-size: 14px; line-height: 1.75; color: #cbd5e1; margin-bottom: 16px; padding: 14px; background: rgba(15,23,42,0.6); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
+    .commentary.muted { color: var(--muted); border-left-color: var(--border); font-style: italic; }
+
+    .price-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .price-cell { background: rgba(15,23,42,0.5); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; text-align: center; }
+    .price-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .price-value { font-size: 15px; font-weight: 600; }
+    .price-value.positive { color: var(--green); }
+    .price-value.negative { color: var(--red); }
+    .price-value.trend-up   { color: var(--green); }
+    .price-value.trend-down { color: var(--red); }
+
+    @media (max-width: 520px) {
+      .price-row { grid-template-columns: repeat(2, 1fr); }
+      .summary-bar { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media print {
+      body { background: #fff; color: #000; }
+      .burst-card, .history-card, .summary-cell { border: 1px solid #ddd; background: #fff; }
+      .burst-shot { border-color: #ddd; background: #fff; }
+      .commentary { background: #f8fafc; border-left-color: #3b82f6; color: #1e293b; }
+      .price-cell { background: #f8fafc; border-color: #ddd; }
+      .btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="report-header">
+    <div>
+      <div class="report-title">DojiDash — Session Report</div>
+      <div class="report-meta">${escapeHtml(r.timestamp || '')} &nbsp;·&nbsp; ${totalBursts} burst${totalBursts !== 1 ? 's' : ''} analysed</div>
     </div>
+    <div class="header-actions">
+      <button class="btn" onclick="window.print()">Print / PDF</button>
+      <button class="btn" onclick="downloadJson()">Download JSON</button>
+    </div>
+  </div>
 
-    <script>
-      const report = ${JSON.stringify(r)};
-      function downloadJson() {
-        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'session-report.json';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
-    </script>
-  </body>
+  <div class="summary-bar">
+    <div class="summary-cell">
+      <div class="summary-num blue">${totalBursts}</div>
+      <div class="summary-lbl">Bursts Played</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-num green">${correct}</div>
+      <div class="summary-lbl">Correct Calls</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-num ${accuracy >= 60 ? 'green' : accuracy >= 40 ? 'blue' : 'red'}">${accuracy}%</div>
+      <div class="summary-lbl">Accuracy</div>
+    </div>
+  </div>
+
+  ${historyScript ? `
+  <div class="section-title">Market backdrop</div>
+  <div class="history-card">
+    <div class="history-text">${escapeHtml(historyScript)}</div>
+  </div>` : ''}
+
+  <div class="section-title">Reveal bursts</div>
+  <div class="bursts-grid">
+    ${burstCardsHtml || '<div class="history-card"><div class="history-text" style="color:var(--muted)">No scored bursts recorded.</div></div>'}
+  </div>
+
+</div>
+<script>
+  const report = ${JSON.stringify(r)};
+  function downloadJson() {
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'session-report.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
 </html>`;
 
     const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+    const url  = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
 }
 window.openSessionReport = openSessionReport;
+
 
 /* -----------------------------------------
    1. LOAD BLOCK FROM SUPABASE
@@ -536,8 +602,14 @@ function handleGuess(guess) {
         baseClose:    baselineClose,
     };
 
-    showStatus("Reveal to see if you were right!");
+    // Expose for focus-narate.js so the narrator attaches the script to the right burst entry
+    window._pendingBurstEndIndex = burstEndIndex;
+
+    showStatus("Revealing…");
     setButtonState("reveal");
+
+    // Single press: prediction is locked — immediately start the reveal burst
+    startAutoReveal();
 }
 
 /* -----------------------------------------
