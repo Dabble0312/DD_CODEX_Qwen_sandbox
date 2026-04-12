@@ -400,7 +400,9 @@ function resetSession() {
    5. REVEAL LOGIC
 ----------------------------------------- */
 function startAutoReveal() {
-    if (!sessionActive || autoRevealActive || awaitingGuess) return;
+    // When awaiting a guess, REVEAL submits the target price instead of revealing candles
+    if (awaitingGuess) { handleGuess(); return; }
+    if (!sessionActive || autoRevealActive) return;
     if (revealIndex >= futureCandles.length) {
         endSession("complete");
         return;
