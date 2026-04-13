@@ -750,39 +750,38 @@ function buildFinalSessionReport() {
 
     // ── Helper: compute cognitive fields for a single burst
     function burstCognition(b) {
-        const targetPrice = +b.userTargetPrice;
-        const actualPrice = +b.actualPrice;
-        const delta       = +b.delta;
-        const pctDev      = Math.abs(delta) / actualPrice * 100;
+        const delta  = +b.delta;
+        const pctDev = Math.abs(delta) / +b.actualPrice * 100;
 
-        // directionalExpectation — derived from userDirection (which encodes target vs baseClose)
+        // directionalExpectation — from userDirection only (target vs baseClose, user belief)
         const directionalExpectation = b.userDirection === 'up' ? 'Positive' : 'Negative';
 
-        // optimismPessimism — target vs actual (delta = actual - target, so delta<0 → target was above actual = Optimistic)
+        // optimismPessimism — from delta only (target vs actual, outcome)
+        // delta = actual - target → delta < 0 means target was above actual = Optimistic
         const optimismPessimism = delta < 0 ? 'Optimistic' : delta > 0 ? 'Pessimistic' : 'Neutral';
 
-        // overshootUndershoot — pct deviation of this single target
+        // overshootUndershoot — two-tier: direction from delta sign, magnitude from pctDev
+        // delta < 0 → Overshoot (aimed above actual), delta > 0 → Undershoot (aimed below actual)
         let overshootUndershoot;
-        if      (pctDev < 1) overshootUndershoot = 'Accurate';
-        else if (pctDev < 3) overshootUndershoot = 'Mild Overshoot/Undershoot';
-        else if (pctDev < 7) overshootUndershoot = 'Moderate Overshoot/Undershoot';
-        else                  overshootUndershoot = 'Strong Overshoot/Undershoot';
+        if (pctDev < 1) {
+            overshootUndershoot = 'Accurate';
+        } else {
+            const direction = delta < 0 ? 'Overshoot' : 'Undershoot';
+            const magnitude = pctDev < 3 ? 'Mild' : pctDev < 7 ? 'Moderate' : 'Strong';
+            overshootUndershoot = `${magnitude} ${direction}`;
+        }
 
-        // magnitudeCalibration — abs(delta) as % of actualPrice for this burst
-        const absDeltaPct = pctDev;
-        let magnitudeCalibration;
-        if      (absDeltaPct < 2) magnitudeCalibration = 'Tight';
-        else if (absDeltaPct < 5) magnitudeCalibration = 'Moderate';
-        else                       magnitudeCalibration = 'Loose';
+        // magnitudeCalibration — magnitude only, from abs(delta)/actual
+        const magnitudeCalibration = pctDev < 2 ? 'Tight' : pctDev < 5 ? 'Moderate' : 'Loose';
 
-        // directionalCalibration — sign of delta for this burst
+        // directionalCalibration — from delta only (how target compared to actual)
         const directionalCalibration = delta < 0 ? 'Aimed Too High' : delta > 0 ? 'Aimed Too Low' : 'Aligned';
 
-        // systematicBias — for a single burst this mirrors directionalCalibration
-        const systematicBias = delta < 0 ? 'Consistent Overshooter' : delta > 0 ? 'Consistent Undershooter' : 'Balanced';
+        // burstBias — single-burst equivalent of systematicBias; no "Consistent" at burst level
+        const burstBias = delta < 0 ? 'Overshooter' : delta > 0 ? 'Undershooter' : 'Balanced';
 
         return {
-            snapshot: { directionalExpectation, optimismPessimism, overshootUndershoot, magnitudeCalibration, directionalCalibration, systematicBias },
+            snapshot: { directionalExpectation, optimismPessimism, overshootUndershoot, magnitudeCalibration, directionalCalibration, burstBias },
             statements: {
                 biasSummary:
                     `The target reflected a ${directionalExpectation} expectation for the move. ` +
@@ -791,7 +790,7 @@ function buildFinalSessionReport() {
                 calibrationSummary:
                     `Calibration was ${magnitudeCalibration}, based on the distance from actual price. ` +
                     `Directionally, the target tended to be ${directionalCalibration}. ` +
-                    `For this burst, the pattern was ${systematicBias}.`,
+                    `For this burst, the user was an ${burstBias}.`,
             },
         };
     }
@@ -803,28 +802,50 @@ function buildFinalSessionReport() {
         b.cognitiveStatements = cog.statements;
     });
 
-    // ── Session-level aggregates (kept in cognitiveSnapshot for JSON completeness)
+    // ── Session-level aggregates
     const totalAbsDelta  = bursts.reduce((s, b) => s + Math.abs(b.delta), 0);
     const totalActual    = bursts.reduce((s, b) => s + b.actualPrice, 0);
     const sumDelta       = bursts.reduce((s, b) => s + b.delta, 0);
     const avgAbsDelta    = totalAbsDelta / bursts.length;
     const avgActual      = totalActual   / bursts.length;
     const meanDelta      = sumDelta      / bursts.length;
-    const avgAbsDeltaPct = (avgAbsDelta  / avgActual)  * 100;
+    const avgAbsDeltaPct = (avgAbsDelta  / avgActual) * 100;
 
-    const positiveCount = bursts.filter(b => b.userDirection === 'up').length;
+    // directionalExpectation — majority of userDirection values (expectation, not outcome)
+    const positiveCount       = bursts.filter(b => b.userDirection === 'up').length;
     const directionalExpectation = positiveCount >= (bursts.length - positiveCount) ? 'Positive' : 'Negative';
-    const optimisticCount  = bursts.filter(b => b.delta < 0).length;
-    const pessimisticCount = bursts.length - optimisticCount;
-    const optimismPessimism = optimisticCount === pessimisticCount ? 'Neutral' : optimisticCount > pessimisticCount ? 'Optimistic' : 'Pessimistic';
+
+    // optimismPessimism — majority of delta signs (outcome, not expectation)
+    const optimisticCount    = bursts.filter(b => b.delta < 0).length;
+    const pessimisticCount   = bursts.length - optimisticCount;
+    const optimismPessimism  = optimisticCount === pessimisticCount ? 'Neutral'
+        : optimisticCount > pessimisticCount ? 'Optimistic' : 'Pessimistic';
+
+    // overshootUndershoot — two-tier using meanDelta sign + avgPctDev magnitude
     const avgPctDev = bursts.reduce((s, b) => s + (Math.abs(b.delta) / b.actualPrice * 100), 0) / bursts.length;
-    const overshootUndershoot = avgPctDev < 1 ? 'Accurate' : avgPctDev < 3 ? 'Mild Overshoot/Undershoot' : avgPctDev < 7 ? 'Moderate Overshoot/Undershoot' : 'Strong Overshoot/Undershoot';
-    const magnitudeCalibration = avgAbsDeltaPct < 2 ? 'Tight' : avgAbsDeltaPct < 5 ? 'Moderate' : 'Loose';
+    let overshootUndershoot;
+    if (avgPctDev < 1) {
+        overshootUndershoot = 'Accurate';
+    } else {
+        const direction = meanDelta < 0 ? 'Overshoot' : 'Undershoot';
+        const magnitude = avgPctDev < 3 ? 'Mild' : avgPctDev < 7 ? 'Moderate' : 'Strong';
+        overshootUndershoot = `${magnitude} ${direction}`;
+    }
+
+    // magnitudeCalibration — avg magnitude only
+    const magnitudeCalibration   = avgAbsDeltaPct < 2 ? 'Tight' : avgAbsDeltaPct < 5 ? 'Moderate' : 'Loose';
+
+    // directionalCalibration — from meanDelta only
     const directionalCalibration = meanDelta < 0 ? 'Aimed Too High' : meanDelta > 0 ? 'Aimed Too Low' : 'Aligned';
+
+    // systematicBias — session-level only; "Consistent" is valid here across multiple bursts
     const systematicBias = meanDelta < 0 ? 'Consistent Overshooter' : meanDelta > 0 ? 'Consistent Undershooter' : 'Balanced';
 
-    sessionReport.cognitiveSnapshot = { directionalExpectation, optimismPessimism, overshootUndershoot, magnitudeCalibration, directionalCalibration, systematicBias };
-    sessionReport.cognitiveStatements = null; // statements now live per-burst
+    sessionReport.cognitiveSnapshot = {
+        directionalExpectation, optimismPessimism, overshootUndershoot,
+        magnitudeCalibration, directionalCalibration, systematicBias,
+    };
+    sessionReport.cognitiveStatements = null; // statements live per-burst
 
     // ── STORE as single source of truth
     window.finalSessionReport = JSON.parse(JSON.stringify(sessionReport));
