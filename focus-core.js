@@ -474,10 +474,11 @@ function renderChart() {
     candlestickSeries.setData(all.map(toCandlePoint));   // shared/chart.js
     volumeSeries.setData(all.map(toVolumePoint));        // shared/chart.js
 
-    // Defer fitContent one frame so LWC has finished processing setData
-    // before we ask it to fit — calling it synchronously fits the old range
+    // Scroll to keep the latest candle visible without re-fitting the whole range.
+    // fitContent would reset the window on every reveal — scrollToRealTime preserves
+    // the rolling effect where new candles on the right push old ones off the left.
     requestAnimationFrame(function () {
-        if (chart) chart.timeScale().fitContent();
+        if (chart) chart.timeScale().scrollToRealTime();
     });
 }
 
