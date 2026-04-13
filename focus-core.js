@@ -470,9 +470,12 @@ function initChart() {
    3. RENDER CHART
 ----------------------------------------- */
 function renderChart() {
-    const all        = [...allCandles, ...revealedSoFar];
+    const all = [...allCandles, ...revealedSoFar];
     candlestickSeries.setData(all.map(toCandlePoint));   // shared/chart.js
     volumeSeries.setData(all.map(toVolumePoint));        // shared/chart.js
+
+    // Always re-fit after data changes so reveal candles never drift outside the window
+    chart.timeScale().fitContent();
 }
 
 /* -----------------------------------------
