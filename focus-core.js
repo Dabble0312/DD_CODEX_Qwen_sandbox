@@ -380,6 +380,7 @@ async function loadFocusBlock() {
         clearPatternHighlights();  // focus-patterns.js
         hidePatternPanels();       // focus-patterns.js
         clearDynamicZones();       // focus-patterns.js
+        if (typeof clearOverlay === 'function') clearOverlay();  // focus-draw.js
 
         // Capture the initial 50-candle "History" moment (image + script) for the Session Report.
         try {
@@ -460,6 +461,9 @@ function initChart() {
     });
 
     setupZoneCanvas(chartDiv);   // focus-patterns.js
+
+    // ── Drawing overlay (focus-draw.js)
+    if (typeof setupOverlayCanvas === 'function') setupOverlayCanvas(chart);
 }
 
 /* -----------------------------------------
