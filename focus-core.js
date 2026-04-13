@@ -123,9 +123,6 @@ function openSessionReport() {
     // ── History commentary
     const historyScript = (r.history && r.history.script) || null;
 
-    // ── Cognitive statements (pre-built by buildFinalSessionReport)
-    const cogStmt       = (r.cognitiveStatements) || null;
-
     // ── Per-burst cards
     const burstCardsHtml = bursts.map((burst, idx) => {
         const burstNum    = idx + 1;
@@ -148,6 +145,19 @@ function openSessionReport() {
         const commentary  = burst.script
             ? `<div class="commentary">${escapeHtml(burst.script)}</div>`
             : `<div class="commentary muted">No market commentary was captured for this burst.</div>`;
+
+        const cog = burst.cognitiveStatements;
+        const cogBlock = cog ? `
+            <div class="burst-cognitive">
+                <div class="burst-cog-card">
+                    <div class="burst-cog-title">Bias</div>
+                    <div class="burst-cog-text">${escapeHtml(cog.biasSummary)}</div>
+                </div>
+                <div class="burst-cog-card">
+                    <div class="burst-cog-title">Calibration</div>
+                    <div class="burst-cog-text">${escapeHtml(cog.calibrationSummary)}</div>
+                </div>
+            </div>` : '';
 
         return `
         <section class="burst-card">
@@ -175,6 +185,7 @@ function openSessionReport() {
                     <div class="price-value trend-${direction}">${direction.toUpperCase()}</div>
                 </div>
             </div>
+            ${cogBlock}
         </section>`;
     }).join('\n');
 
@@ -216,13 +227,13 @@ function openSessionReport() {
     .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 28px; }
     .history-text { font-size: 14px; line-height: 1.7; color: var(--text); }
 
-    /* ── Cognitive analysis */
-    .cognitive-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
-    .cognitive-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
-    .cognitive-title { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
-    .cognitive-text { font-size: 14px; line-height: 1.75; color: #cbd5e1; }
-    @media (max-width: 560px) { .cognitive-grid { grid-template-columns: 1fr; } }
-    @media print { .cognitive-card { background: #fff; border: 1px solid #ddd; } .cognitive-text { color: #1e293b; } }
+    /* ── Cognitive analysis — per burst */
+    .burst-cognitive { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .burst-cog-card { background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.18); border-radius: 8px; padding: 12px 14px; }
+    .burst-cog-title { font-size: 10px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
+    .burst-cog-text { font-size: 13px; line-height: 1.65; color: #cbd5e1; }
+    @media (max-width: 520px) { .burst-cognitive { grid-template-columns: 1fr; } }
+    @media print { .burst-cog-card { background: #f0f4ff; border-color: #bfcfef; } .burst-cog-text { color: #1e293b; } }
 
     /* ── Burst screenshot */
     .burst-shot { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); background: #0b1222; display: block; margin-bottom: 14px; }
@@ -291,19 +302,6 @@ function openSessionReport() {
       <div class="summary-lbl">Accuracy</div>
     </div>
   </div>
-
-  ${cogStmt ? `
-  <div class="section-title">Cognitive analysis</div>
-  <div class="cognitive-grid">
-    <div class="cognitive-card">
-      <div class="cognitive-title">Bias</div>
-      <div class="cognitive-text">${escapeHtml(cogStmt.biasSummary)}</div>
-    </div>
-    <div class="cognitive-card">
-      <div class="cognitive-title">Calibration</div>
-      <div class="cognitive-text">${escapeHtml(cogStmt.calibrationSummary)}</div>
-    </div>
-  </div>` : ''}
 
   ${historyScript ? `
   <div class="section-title">Market backdrop</div>
@@ -744,14 +742,68 @@ function buildFinalSessionReport() {
     const bursts  = reveals.filter(b => b && b.userTargetPrice != null && b.actualPrice != null && b.delta != null);
 
     if (bursts.length === 0) {
-        // No scored bursts — attach empty blocks and store
         sessionReport.cognitiveSnapshot   = null;
         sessionReport.cognitiveStatements = null;
         window.finalSessionReport = JSON.parse(JSON.stringify(sessionReport));
         return;
     }
 
-    // ── Raw aggregates
+    // ── Helper: compute cognitive fields for a single burst
+    function burstCognition(b) {
+        const targetPrice = +b.userTargetPrice;
+        const actualPrice = +b.actualPrice;
+        const delta       = +b.delta;
+        const pctDev      = Math.abs(delta) / actualPrice * 100;
+
+        // directionalExpectation — derived from userDirection (which encodes target vs baseClose)
+        const directionalExpectation = b.userDirection === 'up' ? 'Positive' : 'Negative';
+
+        // optimismPessimism — target vs actual (delta = actual - target, so delta<0 → target was above actual = Optimistic)
+        const optimismPessimism = delta < 0 ? 'Optimistic' : delta > 0 ? 'Pessimistic' : 'Neutral';
+
+        // overshootUndershoot — pct deviation of this single target
+        let overshootUndershoot;
+        if      (pctDev < 1) overshootUndershoot = 'Accurate';
+        else if (pctDev < 3) overshootUndershoot = 'Mild Overshoot/Undershoot';
+        else if (pctDev < 7) overshootUndershoot = 'Moderate Overshoot/Undershoot';
+        else                  overshootUndershoot = 'Strong Overshoot/Undershoot';
+
+        // magnitudeCalibration — abs(delta) as % of actualPrice for this burst
+        const absDeltaPct = pctDev;
+        let magnitudeCalibration;
+        if      (absDeltaPct < 2) magnitudeCalibration = 'Tight';
+        else if (absDeltaPct < 5) magnitudeCalibration = 'Moderate';
+        else                       magnitudeCalibration = 'Loose';
+
+        // directionalCalibration — sign of delta for this burst
+        const directionalCalibration = delta < 0 ? 'Aimed Too High' : delta > 0 ? 'Aimed Too Low' : 'Aligned';
+
+        // systematicBias — for a single burst this mirrors directionalCalibration
+        const systematicBias = delta < 0 ? 'Consistent Overshooter' : delta > 0 ? 'Consistent Undershooter' : 'Balanced';
+
+        return {
+            snapshot: { directionalExpectation, optimismPessimism, overshootUndershoot, magnitudeCalibration, directionalCalibration, systematicBias },
+            statements: {
+                biasSummary:
+                    `The target reflected a ${directionalExpectation} expectation for the move. ` +
+                    `The target was overall ${optimismPessimism} relative to the actual outcome. ` +
+                    `The target showed a ${overshootUndershoot} tendency based on percentage deviation.`,
+                calibrationSummary:
+                    `Calibration was ${magnitudeCalibration}, based on the distance from actual price. ` +
+                    `Directionally, the target tended to be ${directionalCalibration}. ` +
+                    `For this burst, the pattern was ${systematicBias}.`,
+            },
+        };
+    }
+
+    // ── Attach per-burst cognitive data directly onto each reveal entry
+    bursts.forEach(b => {
+        const cog = burstCognition(b);
+        b.cognitiveSnapshot   = cog.snapshot;
+        b.cognitiveStatements = cog.statements;
+    });
+
+    // ── Session-level aggregates (kept in cognitiveSnapshot for JSON completeness)
     const totalAbsDelta  = bursts.reduce((s, b) => s + Math.abs(b.delta), 0);
     const totalActual    = bursts.reduce((s, b) => s + b.actualPrice, 0);
     const sumDelta       = bursts.reduce((s, b) => s + b.delta, 0);
@@ -760,73 +812,21 @@ function buildFinalSessionReport() {
     const meanDelta      = sumDelta      / bursts.length;
     const avgAbsDeltaPct = (avgAbsDelta  / avgActual)  * 100;
 
-    // ── BIAS ─────────────────────────────────────────────
-
-    // directionalExpectation — userDirection encodes targetPrice vs baseClose
     const positiveCount = bursts.filter(b => b.userDirection === 'up').length;
-    const directionalExpectation = positiveCount >= (bursts.length - positiveCount)
-        ? 'Positive' : 'Negative';
-
-    // optimismPessimism — delta < 0 means targetPrice > actualPrice = Optimistic
-    const optimisticCount = bursts.filter(b => b.delta < 0).length;
+    const directionalExpectation = positiveCount >= (bursts.length - positiveCount) ? 'Positive' : 'Negative';
+    const optimisticCount  = bursts.filter(b => b.delta < 0).length;
     const pessimisticCount = bursts.length - optimisticCount;
-    let optimismPessimism;
-    if (optimisticCount === pessimisticCount) optimismPessimism = 'Neutral';
-    else if (optimisticCount > pessimisticCount) optimismPessimism = 'Optimistic';
-    else optimismPessimism = 'Pessimistic';
-
-    // overshootUndershoot — average pct deviation across bursts
+    const optimismPessimism = optimisticCount === pessimisticCount ? 'Neutral' : optimisticCount > pessimisticCount ? 'Optimistic' : 'Pessimistic';
     const avgPctDev = bursts.reduce((s, b) => s + (Math.abs(b.delta) / b.actualPrice * 100), 0) / bursts.length;
-    let overshootUndershoot;
-    if      (avgPctDev < 1) overshootUndershoot = 'Accurate';
-    else if (avgPctDev < 3) overshootUndershoot = 'Mild Overshoot/Undershoot';
-    else if (avgPctDev < 7) overshootUndershoot = 'Moderate Overshoot/Undershoot';
-    else                    overshootUndershoot = 'Strong Overshoot/Undershoot';
+    const overshootUndershoot = avgPctDev < 1 ? 'Accurate' : avgPctDev < 3 ? 'Mild Overshoot/Undershoot' : avgPctDev < 7 ? 'Moderate Overshoot/Undershoot' : 'Strong Overshoot/Undershoot';
+    const magnitudeCalibration = avgAbsDeltaPct < 2 ? 'Tight' : avgAbsDeltaPct < 5 ? 'Moderate' : 'Loose';
+    const directionalCalibration = meanDelta < 0 ? 'Aimed Too High' : meanDelta > 0 ? 'Aimed Too Low' : 'Aligned';
+    const systematicBias = meanDelta < 0 ? 'Consistent Overshooter' : meanDelta > 0 ? 'Consistent Undershooter' : 'Balanced';
 
-    // ── CALIBRATION ──────────────────────────────────────
+    sessionReport.cognitiveSnapshot = { directionalExpectation, optimismPessimism, overshootUndershoot, magnitudeCalibration, directionalCalibration, systematicBias };
+    sessionReport.cognitiveStatements = null; // statements now live per-burst
 
-    // magnitudeCalibration — avg abs(delta) as % of avg actual price
-    let magnitudeCalibration;
-    if      (avgAbsDeltaPct < 2) magnitudeCalibration = 'Tight';
-    else if (avgAbsDeltaPct < 5) magnitudeCalibration = 'Moderate';
-    else                         magnitudeCalibration = 'Loose';
-
-    // directionalCalibration — mean delta direction
-    let directionalCalibration;
-    if      (meanDelta < 0) directionalCalibration = 'Aimed Too High';
-    else if (meanDelta > 0) directionalCalibration = 'Aimed Too Low';
-    else                    directionalCalibration = 'Aligned';
-
-    // systematicBias — mean delta sign
-    let systematicBias;
-    if      (meanDelta < 0) systematicBias = 'Consistent Overshooter';
-    else if (meanDelta > 0) systematicBias = 'Consistent Undershooter';
-    else                    systematicBias = 'Balanced';
-
-    // ── ATTACH cognitiveSnapshot
-    sessionReport.cognitiveSnapshot = {
-        directionalExpectation,
-        optimismPessimism,
-        overshootUndershoot,
-        magnitudeCalibration,
-        directionalCalibration,
-        systematicBias,
-    };
-
-    // ── ATTACH cognitiveStatements
-    sessionReport.cognitiveStatements = {
-        biasSummary:
-            `The target reflected a ${directionalExpectation} expectation for the move. ` +
-            `The target was overall ${optimismPessimism} relative to the actual outcome. ` +
-            `The target showed a ${overshootUndershoot} tendency based on percentage deviation.`,
-
-        calibrationSummary:
-            `Calibration was ${magnitudeCalibration}, based on the average distance from actual price. ` +
-            `Directionally, the targets tended to be ${directionalCalibration}. ` +
-            `Across the session, the user showed a ${systematicBias} pattern.`,
-    };
-
-    // ── STORE as single source of truth (deep copy so live mutations don't corrupt it)
+    // ── STORE as single source of truth
     window.finalSessionReport = JSON.parse(JSON.stringify(sessionReport));
 }
 window.buildFinalSessionReport = buildFinalSessionReport;
