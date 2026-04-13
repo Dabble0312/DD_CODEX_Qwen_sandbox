@@ -67,12 +67,27 @@ function setupOverlayCanvas(chartInstance) {
     if (!_drawCanvas) return;
     _drawCanvas._chart = chartInstance;
     resizeOverlay();
+
+    // Time axis pan/zoom → remap line Y positions
     chartInstance.timeScale().subscribeVisibleLogicalRangeChange(function () {
         requestAnimationFrame(redrawOverlay);
     });
-    chartInstance.subscribeCrosshairMove(function () {
-        requestAnimationFrame(redrawOverlay);
-    });
+
+    // Price axis pan/zoom → remap line Y positions
+    try {
+        chartInstance.priceScale('right').subscribeVisiblePriceRangeChange(function () {
+            requestAnimationFrame(redrawOverlay);
+        });
+    } catch (e) { /* older LWC — covered by mousemove below */ }
+
+    // Belt-and-suspenders: any mouse movement over the chart div triggers a remap.
+    // This catches price-axis drags that LWC events may not surface.
+    var chartDiv = document.getElementById('chart');
+    if (chartDiv) {
+        chartDiv.addEventListener('mousemove', function () {
+            if (_drawnLines.length > 0) requestAnimationFrame(redrawOverlay);
+        });
+    }
 }
 window.setupOverlayCanvas = setupOverlayCanvas;
 
