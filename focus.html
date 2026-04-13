@@ -23,9 +23,14 @@
     <div id="focusStatus" class="focus-status"></div>
 
     <!-- Chart — identical div to game.html so styles.css applies -->
-    <div class="chart-wrapper">
+    <div class="chart-wrapper" id="chart-container">
         <div id="chart"></div>
         <div id="glowOverlay" class="glow-overlay"></div>
+        <!-- Drawing overlay -->
+        <canvas id="overlay-canvas"></canvas>
+        <div id="draw-controls">
+            <button id="draw-line-btn" title="Draw horizontal line">✏️</button>
+        </div>
     </div>
 
     <!-- Stats panel — shows metadata from last revealed candle -->
@@ -67,13 +72,13 @@
     <!-- Buttons -->
     <div class="button-row">
         <button id="revealBtn" class="reveal-btn">REVEAL</button>
-        <button id="downBtn" class="down">DOWN</button>
-        <button id="upBtn" class="up">UP</button>
+        <span class="price-target-label">Target:</span>
+        <input id="priceTarget" type="number" step="0.01" placeholder="e.g. 372.50" class="price-target-input">
         <button id="togglePatternsBtn" class="btn-patterns">Show Patterns</button>
         <button id="togglePatternExplainBtn" class="btn-explain-patterns">Explain Patterns</button>
-      <button id="narratorBtn" class="btn-narrator">
-        <span id="narratorIcon">🔊</span> Narrator Off
-          </button>
+        <button id="narratorBtn" class="btn-narrator">
+            <span id="narratorIcon">🔊</span> Narrator Off
+        </button>
     </div>
 
     <!-- Pattern panel — shows detected patterns on visible candles only -->
@@ -87,12 +92,6 @@
 
     <!-- Price feedback panel — always visible, updates on prediction reveal -->
     <div id="priceFeedback"></div>
-
-    <!-- Price target input — shown when UP/DOWN are active -->
-    <div class="price-target-row">
-        <span class="price-target-label">Price target (optional):</span>
-        <input id="priceTarget" type="number" step="0.01" placeholder="e.g. 372.50" class="price-target-input" disabled>
-    </div>
 
     <!-- Popups — identical to game.html -->
     <div id="resultPopup" class="popup hidden">
@@ -127,6 +126,7 @@
     <script src="focus-patterns.js"></script>
     <script src="focus-narate.js"></script>
     <script src="focus-ui.js"></script>
+    <script src="focus-draw.js"></script>
     <script src="focus-core.js"></script>
 </body>
 
