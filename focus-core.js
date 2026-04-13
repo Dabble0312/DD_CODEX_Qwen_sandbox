@@ -474,8 +474,11 @@ function renderChart() {
     candlestickSeries.setData(all.map(toCandlePoint));   // shared/chart.js
     volumeSeries.setData(all.map(toVolumePoint));        // shared/chart.js
 
-    // Always re-fit after data changes so reveal candles never drift outside the window
-    chart.timeScale().fitContent();
+    // Defer fitContent one frame so LWC has finished processing setData
+    // before we ask it to fit — calling it synchronously fits the old range
+    requestAnimationFrame(function () {
+        if (chart) chart.timeScale().fitContent();
+    });
 }
 
 /* -----------------------------------------
