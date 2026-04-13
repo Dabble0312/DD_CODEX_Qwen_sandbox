@@ -23,9 +23,14 @@
     <div id="focusStatus" class="focus-status"></div>
 
     <!-- Chart — identical div to game.html so styles.css applies -->
-    <div class="chart-wrapper">
+    <div class="chart-wrapper" id="chart-container">
         <div id="chart"></div>
         <div id="glowOverlay" class="glow-overlay"></div>
+        <!-- Drawing overlay -->
+        <canvas id="overlay-canvas"></canvas>
+        <div id="draw-controls">
+            <button id="draw-line-btn" title="Draw horizontal line">➖</button>
+        </div>
     </div>
 
     <!-- Stats panel — shows metadata from last revealed candle -->
@@ -121,6 +126,7 @@
     <script src="focus-patterns.js"></script>
     <script src="focus-narate.js"></script>
     <script src="focus-ui.js"></script>
+    <script src="focus-draw.js"></script>
     <script src="focus-core.js"></script>
 </body>
 
