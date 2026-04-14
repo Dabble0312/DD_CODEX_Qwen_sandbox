@@ -44,14 +44,7 @@ button.btn-dim {
     cursor: not-allowed;
 }
 
-/* ── Price target row ── */
-.price-target-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-}
-
+/* ── Price target input ── */
 .price-target-input {
     padding: 10px 14px;
     border-radius: 12px;
@@ -168,53 +161,92 @@ button.btn-dim {
 
 .summary-toggle-btn:hover { background: #eef2ff; }
 
-/* ── Summary panel ── */
-#summaryPanel {
-    background: var(--color-bg);
-    border: 1px solid rgba(99,102,241,0.2);
-    border-left: 3px solid var(--color-indigo);
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin-top: 8px;
-    font-size: 13px;
-    line-height: 1.7;
-    color: var(--color-slate);
+/* ── Controls zone — the positioned wrapper that anchors floating panels ── */
+.controls-zone {
+    position: relative;  /* containing block for #summaryPanel and #patternExplainPanel */
+    margin-top: 12px;
 }
 
-#summaryPanel.hidden { display: none; }
-
-/* ── Button variants ── */
-.reveal-btn          { background: var(--color-indigo); color: white; }
-.btn-patterns        { background: var(--color-text-primary); color: white; }
-.btn-explain-patterns { background: var(--color-teal); color: white; }
-
+/* ── Button row ── */
 .button-row {
     display: flex;
     align-items: center;
-    margin-top: 12px;
     flex-wrap: wrap;
     gap: 8px;
 }
 
-/* ── Pattern panel ── */
+/* ── Summary panel — floats right over the controls zone, never over the chart ── */
+#summaryPanel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 46%;
+    max-width: 360px;
+    max-height: 140px;
+    overflow-y: auto;
+    z-index: 40;
+    background: rgba(238, 242, 255, 0.97);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-left: 3px solid var(--color-indigo);
+    border-radius: 10px;
+    padding: 10px 13px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--color-slate);
+    box-shadow: 0 4px 16px rgba(99,102,241,0.10);
+    /* Translate upward so it sits just above the button row */
+    transform: translateY(calc(-100% - 6px));
+}
+
+#summaryPanel.hidden { display: none; }
+
+/* ── Pattern explanation panel — floats right, anchored to Explain Patterns button ── */
+#patternExplainPanel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 46%;
+    max-width: 360px;
+    max-height: 160px;
+    overflow-y: auto;
+    z-index: 40;
+    background: rgba(240, 253, 250, 0.97);
+    border: 1px solid rgba(15,118,110,0.2);
+    border-left: 3px solid var(--color-teal);
+    border-radius: 10px;
+    padding: 10px 13px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--color-slate);
+    box-shadow: 0 4px 16px rgba(15,118,110,0.08);
+    /* Translate upward so it sits just above the button row */
+    transform: translateY(calc(-100% - 6px));
+}
+
+#patternExplainPanel.hidden { display: none; }
+
+.pattern-explain-item  { margin-bottom: 8px; }
+.pattern-explain-label { font-weight: 700; color: var(--color-text-primary); margin-bottom: 2px; font-size: 12px; }
+
+/* ── Pattern panel — stays in document flow below buttons ── */
 #patternPanel {
     background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 8px 12px;
     margin-top: 8px;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 #patternPanel.hidden { display: none; }
 
 .pattern-tag {
     display: inline-block;
-    padding: 3px 10px;
+    padding: 2px 9px;
     border-radius: 99px;
     font-size: 11px;
     font-weight: 600;
-    margin: 3px 4px 3px 0;
+    margin: 2px 3px 2px 0;
     background: #e0e7ff;
     color: #3730a3;
 }
@@ -225,24 +257,10 @@ button.btn-dim {
     font-style: italic;
 }
 
-/* ── Pattern explanation panel ── */
-#patternExplainPanel {
-    background: var(--color-bg);
-    border: 1px solid rgba(15,118,110,0.2);
-    border-left: 3px solid var(--color-teal);
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin-top: 8px;
-    font-size: 13px;
-    line-height: 1.7;
-    color: var(--color-slate);
-}
-
-#patternExplainPanel.hidden { display: none; }
-
-.pattern-explain-item  { margin-bottom: 10px; }
-.pattern-explain-label { font-weight: 700; color: var(--color-text-primary); margin-bottom: 3px; }
-
+/* ── Button variants ── */
+.reveal-btn           { background: var(--color-indigo); color: white; }
+.btn-patterns         { background: var(--color-text-primary); color: white; }
+.btn-explain-patterns { background: var(--color-teal); color: white; }
 
 .btn-narrator {
     background: var(--color-slate);
@@ -255,60 +273,60 @@ button.btn-dim {
 }
 
 .btn-narrator.active {
-    background: #a855f7; /* Purple glow when ON */
+    background: #a855f7;
     box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
 }
 
 /* ── chart-wrapper must be a positioning parent ── */
 .chart-wrapper {
-  position: relative;
+    position: relative;
 }
 
 /* ── Drawing overlay canvas ── */
 #overlay-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 10;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
 }
 
 /* ── Draw controls container ── */
 #draw-controls {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 20;
-  display: flex;
-  gap: 4px;
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 20;
+    display: flex;
+    gap: 4px;
 }
 
 /* ── Draw line button ── */
 #draw-line-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(255, 255, 255, 0.92);
-  color: #374151;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: background 0.15s, border-color 0.15s;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.92);
+    color: #374151;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: background 0.15s, border-color 0.15s;
 }
 
 #draw-line-btn:hover {
-  background: #f0f9ff;
-  border-color: #3b82f6;
+    background: #f0f9ff;
+    border-color: #3b82f6;
 }
 
 #draw-line-btn.active {
-  background: #3b82f6;
-  border-color: #2563eb;
-  color: #fff;
+    background: #3b82f6;
+    border-color: #2563eb;
+    color: #fff;
 }
