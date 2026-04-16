@@ -31,19 +31,61 @@ window.addEventListener('DOMContentLoaded', function () {
             _submitCommand(chip.dataset.cmd);
         });
     });
+
+    // Close buttons inside right panel sections
+    document.querySelectorAll('.right-panel-close').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var targetId = btn.dataset.closes;
+            if (targetId) _closeRightPanelSection(targetId);
+        });
+    });
 });
+
+// =========================
+// RIGHT PANEL HELPERS
+// =========================
+function _showRightPanelSection(id) {
+    // Hide all sections first, then show the requested one
+    document.querySelectorAll('.right-panel-section').forEach(function (el) {
+        el.classList.add('hidden');
+    });
+    var section = document.getElementById(id);
+    if (section) section.classList.remove('hidden');
+
+    // Hide placeholder
+    var placeholder = document.getElementById('rightPanelPlaceholder');
+    if (placeholder) placeholder.classList.add('hidden');
+}
+
+function _closeRightPanelSection(id) {
+    var section = document.getElementById(id);
+    if (section) section.classList.add('hidden');
+
+    // If nothing else is visible, show placeholder
+    var anyVisible = false;
+    document.querySelectorAll('.right-panel-section').forEach(function (el) {
+        if (!el.classList.contains('hidden')) anyVisible = true;
+    });
+    var placeholder = document.getElementById('rightPanelPlaceholder');
+    if (placeholder) placeholder.classList.toggle('hidden', anyVisible);
+
+    // Sync toggle button state
+    if (id === 'chatPanel') {
+        _chatOpen = false;
+        var toggle = document.getElementById('chatToggleBtn');
+        if (toggle) toggle.classList.remove('active');
+    }
+}
 
 // =========================
 // TOGGLE
 // =========================
 function _toggleChat() {
     _chatOpen = !_chatOpen;
-    var panel  = document.getElementById('chatPanel');
     var toggle = document.getElementById('chatToggleBtn');
-    if (!panel) return;
 
     if (_chatOpen) {
-        panel.classList.remove('hidden');
+        _showRightPanelSection('chatPanel');
         if (toggle) toggle.classList.add('active');
         // Greet only on first open
         if (_msgHistory.length === 0) {
@@ -56,8 +98,7 @@ function _toggleChat() {
         }
         _scrollToBottom();
     } else {
-        panel.classList.add('hidden');
-        if (toggle) toggle.classList.remove('active');
+        _closeRightPanelSection('chatPanel');
     }
 }
 window.toggleChat = _toggleChat;
@@ -368,3 +409,41 @@ function _scrollToBottom() {
     var feed = document.getElementById('chatFeed');
     if (feed) feed.scrollTop = feed.scrollHeight;
 }
+
+// Expose right-panel section manager so focus-ui.js can route patternExplainPanel
+window.showRightPanelSection  = _showRightPanelSection;
+window.closeRightPanelSection = _closeRightPanelSection;
+
+// ── Shim: route patternExplainPanel through the right panel system.
+// focus-ui.js sets innerHTML and toggles .hidden directly on #patternExplainPanel.
+// We watch both and forward appropriately.
+window.addEventListener('DOMContentLoaded', function () {
+    var panel   = document.getElementById('patternExplainPanel');
+    var bodyDiv = document.getElementById('patternExplainBody');
+    if (!panel || !bodyDiv) return;
+
+    // When focus-ui.js sets innerHTML on patternExplainPanel, copy it into bodyDiv.
+    // We override the setter on the Element prototype for this specific node.
+    var nativeDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    Object.defineProperty(panel, 'innerHTML', {
+        set: function (html) {
+            bodyDiv.innerHTML = html;
+        },
+        get: function () {
+            return bodyDiv.innerHTML;
+        },
+        configurable: true,
+    });
+
+    // Watch for .hidden class removal → open the right panel section
+    var observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+            if (m.attributeName === 'class') {
+                if (!panel.classList.contains('hidden')) {
+                    _showRightPanelSection('patternExplainPanel');
+                }
+            }
+        });
+    });
+    observer.observe(panel, { attributes: true });
+});
