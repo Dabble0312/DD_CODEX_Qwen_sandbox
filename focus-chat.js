@@ -417,7 +417,7 @@ window.closeRightPanelSection = _closeRightPanelSection;
 // ── Shim: route patternExplainPanel through the right panel system.
 // focus-ui.js sets innerHTML and toggles .hidden directly on #patternExplainPanel.
 // We watch both and forward appropriately.
-window.addEventListener('DOMContentLoaded', function () {
+(function initPatternExplainShim() {
     var panel   = document.getElementById('patternExplainPanel');
     var bodyDiv = document.getElementById('patternExplainBody');
     if (!panel || !bodyDiv) return;
@@ -446,4 +446,4 @@ window.addEventListener('DOMContentLoaded', function () {
         });
     });
     observer.observe(panel, { attributes: true });
-});
+})();
