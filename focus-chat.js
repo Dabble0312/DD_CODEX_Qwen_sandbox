@@ -413,37 +413,3 @@ function _scrollToBottom() {
 // Expose right-panel section manager so focus-ui.js can route patternExplainPanel
 window.showRightPanelSection  = _showRightPanelSection;
 window.closeRightPanelSection = _closeRightPanelSection;
-
-// ── Shim: route patternExplainPanel through the right panel system.
-// focus-ui.js sets innerHTML and toggles .hidden directly on #patternExplainPanel.
-// We watch both and forward appropriately.
-(function initPatternExplainShim() {
-    var panel   = document.getElementById('patternExplainPanel');
-    var bodyDiv = document.getElementById('patternExplainBody');
-    if (!panel || !bodyDiv) return;
-
-    // When focus-ui.js sets innerHTML on patternExplainPanel, copy it into bodyDiv.
-    // We override the setter on the Element prototype for this specific node.
-    var nativeDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
-    Object.defineProperty(panel, 'innerHTML', {
-        set: function (html) {
-            bodyDiv.innerHTML = html;
-        },
-        get: function () {
-            return bodyDiv.innerHTML;
-        },
-        configurable: true,
-    });
-
-    // Watch for .hidden class removal → open the right panel section
-    var observer = new MutationObserver(function (mutations) {
-        mutations.forEach(function (m) {
-            if (m.attributeName === 'class') {
-                if (!panel.classList.contains('hidden')) {
-                    _showRightPanelSection('patternExplainPanel');
-                }
-            }
-        });
-    });
-    observer.observe(panel, { attributes: true });
-})();
