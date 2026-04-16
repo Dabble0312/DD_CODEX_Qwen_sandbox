@@ -11,127 +11,150 @@
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="focus.css">
-
 </head>
 
 <body>
 
     <div id="usernameDisplay" class="username-display"></div>
-
-    <!-- Focus Mode HUD — replaces streak display -->
     <div id="focusHUD" class="focus-hud">Loading...</div>
     <div id="focusStatus" class="focus-status"></div>
 
-    <!-- Chart — identical div to game.html so styles.css applies -->
+    <!-- Chart — full width -->
     <div class="chart-wrapper" id="chart-container">
         <div id="chart"></div>
         <div id="glowOverlay" class="glow-overlay"></div>
-        <!-- Drawing overlay -->
         <canvas id="overlay-canvas"></canvas>
         <div id="draw-controls">
             <button id="draw-line-btn" title="Drawing tools">✏️</button>
         </div>
     </div>
 
-    <!-- Reveal count selector -->
-    <div class="reveal-count-row">
-        <label for="revealCount">Candles to reveal:</label>
-        <select id="revealCount" class="reveal-count-select">
-            <option value="1">1 day</option>
-            <option value="2">2 days</option>
-            <option value="3">3 days</option>
-            <option value="4" selected>4 days</option>
-            <option value="5">5 days</option>
-            <option value="6">6 days</option>
-            <option value="7">7 days</option>
-        </select>
-    </div>
+    <!-- ═══════════════════════════════════════════════════
+         BELOW-CHART LAYOUT  — two columns
+         Left : controls + candle context
+         Right: right panel (pattern explain / chat)
+    ════════════════════════════════════════════════════ -->
+    <div class="below-chart">
 
-    <!-- Stats panel — shows metadata from last revealed candle -->
-    <div class="stats-panel-header">
-        <span class="stats-label">Candle context</span>
-        <button id="summaryToggleBtn" class="summary-toggle-btn">
-            &#9432; Explain this candle
-        </button>
-    </div>
-    <div class="stats-panel">
-        <div class="stat-pill">Trend: <span id="statTrend">—</span></div>
-        <div class="stat-pill">Momentum: <span id="statMomentum">—</span></div>
-        <div class="stat-pill">Volatility: <span id="statVolatility">—</span></div>
-        <div class="stat-pill">RSI: <span id="statRSI">—</span></div>
-        <div class="stat-pill">ATR: <span id="statATR">—</span></div>
-        <div class="stat-pill">Volume: <span id="statVolume">—</span></div>
-        <div class="stat-pill">Candle: <span id="statStrength">—</span></div>
-    </div>
+        <!-- ── LEFT COLUMN ── -->
+        <div class="left-col">
 
-    <!-- Controls zone — positioned wrapper so floating panels anchor here, not over the chart -->
-    <div class="controls-zone">
-
-        <!-- Buttons -->
-        <div class="button-row">
-            <button id="revealBtn" class="reveal-btn">REVEAL</button>
-            <span class="price-target-label">Target:</span>
-            <input id="priceTarget" type="number" step="0.01" placeholder="e.g. 372.50" class="price-target-input">
-            <button id="togglePatternsBtn" class="btn-patterns">Show Patterns</button>
-            <button id="togglePatternExplainBtn" class="btn-explain-patterns">Explain Patterns</button>
-            <button id="narratorBtn" class="btn-narrator">
-                <span id="narratorIcon">🔊</span> Narrator Off
-            </button>
-            <button id="chatToggleBtn" class="btn-chat" title="Open cognition chat">💬 Chat</button>
-        </div>
-
-        <!-- Summary panel — floats right, anchored to "Explain this candle" -->
-        <div id="summaryPanel" class="hidden">
-            <span id="summaryText"></span>
-        </div>
-
-        <!-- Pattern explanation panel — floats right, anchored to "Explain Patterns" button -->
-        <div id="patternExplainPanel" class="hidden"></div>
-
-        <!-- Cognition Chat panel -->
-        <div id="chatPanel" class="hidden">
-            <div class="chat-header">
-                <span class="chat-header-title">📊 DojiDash Chat</span>
-                <span class="chat-header-sub">Cognition engine · No predictions</span>
+            <!-- Reveal count -->
+            <div class="reveal-count-row">
+                <label for="revealCount">Candles to reveal:</label>
+                <select id="revealCount" class="reveal-count-select">
+                    <option value="1">1 day</option>
+                    <option value="2">2 days</option>
+                    <option value="3">3 days</option>
+                    <option value="4" selected>4 days</option>
+                    <option value="5">5 days</option>
+                    <option value="6">6 days</option>
+                    <option value="7">7 days</option>
+                </select>
             </div>
-            <div id="chatFeed" class="chat-feed"></div>
-            <div class="chat-chips">
-                <button class="chat-chip" data-cmd="/explain last candle">Last candle</button>
-                <button class="chat-chip" data-cmd="/explain last 5">Last 5</button>
-                <button class="chat-chip" data-cmd="/explain patterns">Patterns</button>
-                <button class="chat-chip" data-cmd="/explain market">Market backdrop</button>
-                <button class="chat-chip" data-cmd="/explain breakout">Breakout</button>
-                <button class="chat-chip" data-cmd="/explain failed breakout">Failed breakout</button>
+
+            <!-- Candle context header + stats pills -->
+            <div class="stats-panel-header">
+                <span class="stats-label">Candle context</span>
+                <button id="summaryToggleBtn" class="summary-toggle-btn">
+                    &#9432; Explain this candle
+                </button>
             </div>
-            <div class="chat-input-row">
-                <input id="chatInput" class="chat-input" type="text"
-                    placeholder="e.g. /explain last candle …" autocomplete="off" />
-                <button id="chatSendBtn" class="chat-send-btn">Send</button>
+            <div class="stats-panel">
+                <div class="stat-pill">Trend: <span id="statTrend">—</span></div>
+                <div class="stat-pill">Momentum: <span id="statMomentum">—</span></div>
+                <div class="stat-pill">Volatility: <span id="statVolatility">—</span></div>
+                <div class="stat-pill">RSI: <span id="statRSI">—</span></div>
+                <div class="stat-pill">ATR: <span id="statATR">—</span></div>
+                <div class="stat-pill">Volume: <span id="statVolume">—</span></div>
+                <div class="stat-pill">Candle: <span id="statStrength">—</span></div>
             </div>
-        </div>
 
-    </div>
+            <!-- Summary panel (candle explanation) — inline in left col -->
+            <div id="summaryPanel" class="hidden">
+                <span id="summaryText"></span>
+            </div>
 
-    <!-- Pattern panel — stays in flow below buttons -->
-    <div id="patternPanel" class="hidden"></div>
+            <!-- Button row -->
+            <div class="button-row">
+                <button id="revealBtn" class="reveal-btn">REVEAL</button>
+                <span class="price-target-label">Target:</span>
+                <input id="priceTarget" type="number" step="0.01" placeholder="e.g. 372.50" class="price-target-input">
+                <button id="togglePatternsBtn" class="btn-patterns">Patterns</button>
+                <button id="togglePatternExplainBtn" class="btn-explain-patterns">Explain</button>
+                <!-- Narrator: icon only, tooltip on hover -->
+                <button id="narratorBtn" class="btn-narrator" title="Narrate chart">
+                    <span id="narratorIcon">🔊</span>
+                </button>
+                <!-- Chat: icon only, tooltip on hover -->
+                <button id="chatToggleBtn" class="btn-chat" title="Open cognition chat">💬</button>
+            </div>
 
-    <!-- Candle info panel — always visible, updates on click -->
-    <div id="candleInfo"><span class="candle-info-empty">Click any candle to inspect</span></div>
+            <!-- Pattern tags panel -->
+            <div id="patternPanel" class="hidden"></div>
 
-    <!-- Price feedback panel — always visible, updates on prediction reveal -->
-    <div id="priceFeedback"></div>
+            <!-- Candle info -->
+            <div id="candleInfo"><span class="candle-info-empty">Click any candle to inspect</span></div>
 
-    <!-- Popups — identical to game.html -->
+            <!-- Price feedback -->
+            <div id="priceFeedback"></div>
+
+        </div><!-- /left-col -->
+
+        <!-- ── RIGHT PANEL ── -->
+        <div class="right-panel" id="rightPanel">
+
+            <!-- Default state: placeholder shown when nothing is active -->
+            <div class="right-panel-placeholder" id="rightPanelPlaceholder">
+                <span>Click <strong>Explain</strong> or <strong>💬</strong> to open here</span>
+            </div>
+
+            <!-- Pattern explanation — shown inside right panel -->
+            <div id="patternExplainPanel" class="right-panel-section hidden">
+                <div class="right-panel-section-header">
+                    <span class="right-panel-section-title">Pattern Explanation</span>
+                    <button class="right-panel-close" data-closes="patternExplainPanel">✕</button>
+                </div>
+                <div class="right-panel-section-body" id="patternExplainBody"></div>
+            </div>
+
+            <!-- Chat panel — shown inside right panel -->
+            <div id="chatPanel" class="right-panel-section hidden">
+                <div class="chat-header right-panel-section-header">
+                    <span class="chat-header-title">📊 DojiDash Chat</span>
+                    <span class="chat-header-sub">No predictions</span>
+                    <button class="right-panel-close" data-closes="chatPanel">✕</button>
+                </div>
+                <div id="chatFeed" class="chat-feed"></div>
+                <div class="chat-chips">
+                    <button class="chat-chip" data-cmd="/explain last candle">Last candle</button>
+                    <button class="chat-chip" data-cmd="/explain last 5">Last 5</button>
+                    <button class="chat-chip" data-cmd="/explain patterns">Patterns</button>
+                    <button class="chat-chip" data-cmd="/explain market">Market</button>
+                    <button class="chat-chip" data-cmd="/explain breakout">Breakout</button>
+                    <button class="chat-chip" data-cmd="/explain failed breakout">Failed BO</button>
+                </div>
+                <div class="chat-input-row">
+                    <input id="chatInput" class="chat-input" type="text"
+                        placeholder="e.g. /explain last candle …" autocomplete="off" />
+                    <button id="chatSendBtn" class="chat-send-btn">Send</button>
+                </div>
+            </div>
+
+        </div><!-- /right-panel -->
+
+    </div><!-- /below-chart -->
+
+    <!-- Popups -->
     <div id="resultPopup" class="popup hidden">
         <span id="popupResultText"></span>
     </div>
-
     <div id="wsbPopup" class="wsb-popup">
         <img id="mascotEmoji" class="wsb-emoji">
         <span id="wsbText" class="wsb-text"></span>
     </div>
 
-    <!-- End screen — identical structure to game.html -->
+    <!-- End screen -->
     <div id="endScreen" class="end-screen hidden">
         <div class="end-content">
             <h2>Session Over</h2>
@@ -144,8 +167,7 @@
 
     <!-- Scripts -->
     <script src="config.js"></script>
-    <script
-        src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase.js"></script>
     <script src="shared/chart.js"></script>
