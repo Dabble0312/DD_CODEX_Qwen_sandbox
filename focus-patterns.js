@@ -492,16 +492,24 @@ function togglePatternExplain() {
 
     if (!panel.classList.contains('hidden')) {
         panel.classList.add('hidden');
+        // Show placeholder when closing
+        const placeholder = document.getElementById('rightPanelPlaceholder');
+        if (placeholder) placeholder.classList.remove('hidden');
         return;
     }
 
+    // Hide placeholder and show pattern explain panel
+    const placeholder = document.getElementById('rightPanelPlaceholder');
+    if (placeholder) placeholder.classList.add('hidden');
+    
     renderPatternExplain();
     panel.classList.remove('hidden');
 }
 
 function renderPatternExplain() {
     const panel = document.getElementById('patternExplainPanel');
-    if (!panel) return;
+    const bodyDiv = document.getElementById('patternExplainBody');
+    if (!panel || !bodyDiv) return;
 
     const visible = getVisiblePatterns();
     const filtered = activePatternFilter.size > 0
@@ -509,11 +517,11 @@ function renderPatternExplain() {
         : visible;
 
     if (filtered.length === 0) {
-        panel.innerHTML = '<span class="pattern-none">No sequences detected on visible candles yet.</span>';
+        bodyDiv.innerHTML = '<span class="pattern-none">No sequences detected on visible candles yet.</span>';
         return;
     }
 
-    panel.innerHTML = filtered.map(p => {
+    bodyDiv.innerHTML = filtered.map(p => {
         const s = summarizePattern(p);
         const colour = PATTERN_COLOURS[p.label] || '#6366f1';
         const dates = `${p.start_date.slice(0, 10)} → ${p.end_date.slice(0, 10)}`;

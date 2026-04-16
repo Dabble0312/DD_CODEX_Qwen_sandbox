@@ -101,130 +101,240 @@ function escapeHtml(str) {
 }
 
 function openSessionReport() {
-    if (!window.sessionReport) {
+    if (!window.finalSessionReport) {
+        // Fallback: if session ended but finalSessionReport wasn't set yet, build it now
+        buildFinalSessionReport();
+    }
+    if (!window.finalSessionReport) {
         alert('No session report found yet.');
         return;
     }
 
-    const r = window.sessionReport;
+    const r       = window.finalSessionReport;
     const reveals = Array.isArray(r.reveals) ? r.reveals : [];
-    const pred = r.prediction || {};
 
-    const historyImg = r.history && r.history.image ? `<img class="shot" src="${r.history.image}" />` : `<div class="missing">No screenshot captured.</div>`;
-    const historyScript = r.history && r.history.script ? escapeHtml(r.history.script) : '(no script captured)';
+    // ── Only scored bursts (entries that have a user prediction attached)
+    const bursts = reveals.filter(rev => rev && rev.userTargetPrice != null);
 
-    const revealHtml = reveals.map((rev, idx) => {
-        const img = rev && rev.image ? `<img class="shot" src="${rev.image}" />` : `<div class="missing">Screenshot pending / missing.</div>`;
-        const script = escapeHtml((rev && rev.script) || '');
-        const step = (rev && (rev.step || rev.step === 0)) ? rev.step : (idx + 1);
+    const totalBursts = bursts.length;
+    const correct     = bursts.filter(b => b.isCorrect).length;
+    const accuracy    = totalBursts > 0 ? Math.round((correct / totalBursts) * 100) : 0;
+
+    // ── History commentary
+    const historyScript = (r.history && r.history.script) || null;
+
+    // ── Per-burst cards
+    const burstCardsHtml = bursts.map((burst, idx) => {
+        const burstNum    = idx + 1;
+        const target      = burst.userTargetPrice != null ? (+burst.userTargetPrice).toFixed(2) : '—';
+        const actual      = burst.actualPrice      != null ? (+burst.actualPrice).toFixed(2)      : '—';
+        const delta       = burst.delta            != null ? (+burst.delta).toFixed(2)             : '—';
+        const isCorrect   = burst.isCorrect;
+        const direction   = burst.userDirection || '—';
+
+        const deltaNum    = burst.delta != null ? +burst.delta : null;
+        const deltaSign   = deltaNum != null ? (deltaNum >= 0 ? '+' : '') : '';
+        const deltaClass  = deltaNum == null ? '' : (deltaNum >= 0 ? 'positive' : 'negative');
+        const resultClass = isCorrect ? 'correct' : 'wrong';
+        const resultLabel = isCorrect ? '✓ Correct' : '✗ Incorrect';
+
+        const screenshot  = burst.image
+            ? `<img class="burst-shot" src="${burst.image}" />`
+            : `<div class="shot-missing">No screenshot captured for this burst.</div>`;
+
+        const commentary  = burst.script
+            ? `<div class="commentary">${escapeHtml(burst.script)}</div>`
+            : `<div class="commentary muted">No market commentary was captured for this burst.</div>`;
+
+        const cog = burst.cognitiveStatements;
+        const cogBlock = cog ? `
+            <div class="burst-cognitive">
+                <div class="burst-cog-card">
+                    <div class="burst-cog-title">Bias</div>
+                    <div class="burst-cog-text">${escapeHtml(cog.biasSummary)}</div>
+                </div>
+                <div class="burst-cog-card">
+                    <div class="burst-cog-title">Calibration</div>
+                    <div class="burst-cog-text">${escapeHtml(cog.calibrationSummary)}</div>
+                </div>
+            </div>` : '';
+
         return `
-            <section class="card">
-                <h3>Reveal Burst ${escapeHtml(step)}</h3>
-                ${img}
-                <pre class="script">${script || '(no script captured)'}</pre>
-            </section>
-        `;
+        <section class="burst-card">
+            <div class="burst-header">
+                <span class="burst-label">Burst ${burstNum}</span>
+                <span class="result-badge ${resultClass}">${resultLabel}</span>
+            </div>
+            ${screenshot}
+            ${commentary}
+            <div class="price-row">
+                <div class="price-cell">
+                    <div class="price-label">Your Target</div>
+                    <div class="price-value">₹${target}</div>
+                </div>
+                <div class="price-cell">
+                    <div class="price-label">Actual Close</div>
+                    <div class="price-value">₹${actual}</div>
+                </div>
+                <div class="price-cell">
+                    <div class="price-label">Delta</div>
+                    <div class="price-value ${deltaClass}">${deltaSign}${delta}</div>
+                </div>
+                <div class="price-cell">
+                    <div class="price-label">Trend Called</div>
+                    <div class="price-value trend-${direction}">${direction.toUpperCase()}</div>
+                </div>
+            </div>
+            ${cogBlock}
+        </section>`;
     }).join('\n');
-
-    const predBlock = `
-        <section class="card">
-            <h3>Prediction</h3>
-            <div class="kv"><span class="k">Guess</span><span class="v">${escapeHtml(pred.guess || '')}</span></div>
-            <div class="kv"><span class="k">Target</span><span class="v">${pred.target == null ? '' : escapeHtml(pred.target)}</span></div>
-            <div class="kv"><span class="k">Final Close</span><span class="v">${pred.actualPrice == null ? '' : escapeHtml(pred.actualPrice)}</span></div>
-            <div class="kv"><span class="k">Correct</span><span class="v">${escapeHtml(String(!!pred.isCorrect))}</span></div>
-            <div class="kv"><span class="k">Accuracy Delta</span><span class="v">${pred.accuracyDelta == null ? '' : escapeHtml(pred.accuracyDelta)}</span></div>
-        </section>
-    `;
 
     const html = `<!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Session Report</title>
-    <style>
-      :root { --bg:#0b0f19; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --line:#1f2937; }
-      * { box-sizing: border-box; }
-      body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-      .wrap { max-width: 980px; margin: 0 auto; }
-      header { display:flex; gap:12px; align-items:baseline; justify-content:space-between; margin-bottom: 16px; }
-      h1 { font-size: 20px; margin: 0; }
-      .meta { color: var(--muted); font-size: 12px; }
-      .actions { display:flex; gap:8px; }
-      button { border:1px solid var(--line); background:#0f172a; color:var(--text); padding:8px 10px; border-radius:10px; cursor:pointer; }
-      button:hover { background:#111c33; }
-      .grid { display:grid; gap:12px; }
-      .card { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
-      h2 { font-size: 16px; margin: 0 0 8px; }
-      h3 { font-size: 14px; margin: 0 0 8px; color: var(--text); }
-      .shot { width: 100%; height: auto; border-radius: 10px; border:1px solid var(--line); background:#0b1222; }
-      .missing { padding: 12px; border-radius: 10px; border:1px dashed var(--line); color: var(--muted); }
-      .script { white-space: pre-wrap; margin: 10px 0 0; padding: 10px; border-radius: 10px; border:1px solid var(--line); background:#0f172a; color: var(--text); font-size: 12px; line-height: 1.5; }
-      .kv { display:flex; justify-content:space-between; gap:12px; padding: 6px 0; border-bottom: 1px solid rgba(31,41,55,0.7); }
-      .kv:last-child { border-bottom: none; }
-      .k { color: var(--muted); }
-      @media print {
-        body { background: #fff; color: #000; padding: 0; }
-        .card { border:1px solid #ddd; background:#fff; }
-        .script { background:#f7f7f7; border:1px solid #ddd; color:#000; }
-        button { display:none; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <header>
-        <div>
-          <h1>Session Report</h1>
-          <div class="meta">Timestamp: ${escapeHtml(r.timestamp || '')} • Reveals: ${reveals.length}</div>
-        </div>
-        <div class="actions">
-          <button onclick="window.print()">Print / Save PDF</button>
-          <button onclick="downloadJson()">Download JSON</button>
-        </div>
-      </header>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DojiDash — Session Report</title>
+  <style>
+    :root {
+      --bg: #0b0f19; --surface: #111827; --border: #1f2937;
+      --text: #e5e7eb; --muted: #6b7280; --accent: #3b82f6;
+      --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 32px 24px; }
+    .wrap { max-width: 820px; margin: 0 auto; }
 
-      <div class="grid">
-        <section class="card">
-          <h2>History (Initial 50 Candles)</h2>
-          ${historyImg}
-          <pre class="script">${historyScript}</pre>
-        </section>
+    /* ── Header */
+    .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; gap: 16px; flex-wrap: wrap; }
+    .report-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .report-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .header-actions { display: flex; gap: 8px; }
+    .btn { border: 1px solid var(--border); background: #0f172a; color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .btn:hover { background: #1e293b; }
 
-        ${predBlock}
+    /* ── Summary bar */
+    .summary-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+    .summary-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+    .summary-num { font-size: 28px; font-weight: 700; line-height: 1; }
+    .summary-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .summary-num.green { color: var(--green); }
+    .summary-num.red   { color: var(--red); }
+    .summary-num.blue  { color: var(--accent); }
 
-        <section class="card">
-          <h2>Reveal Bursts</h2>
-          <div class="grid">
-            ${revealHtml || '<div class="missing">No reveal bursts recorded.</div>'}
-          </div>
-        </section>
-      </div>
+    /* ── History section */
+    .section-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 12px; }
+    .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 28px; }
+    .history-text { font-size: 14px; line-height: 1.7; color: var(--text); }
+
+    /* ── Cognitive analysis — per burst */
+    .burst-cognitive { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .burst-cog-card { background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.18); border-radius: 8px; padding: 12px 14px; }
+    .burst-cog-title { font-size: 10px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
+    .burst-cog-text { font-size: 13px; line-height: 1.65; color: #cbd5e1; }
+    @media (max-width: 520px) { .burst-cognitive { grid-template-columns: 1fr; } }
+    @media print { .burst-cog-card { background: #f0f4ff; border-color: #bfcfef; } .burst-cog-text { color: #1e293b; } }
+
+    /* ── Burst screenshot */
+    .burst-shot { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); background: #0b1222; display: block; margin-bottom: 14px; }
+    .shot-missing { padding: 12px; border-radius: 8px; border: 1px dashed var(--border); color: var(--muted); font-size: 12px; font-style: italic; margin-bottom: 14px; }
+
+    /* ── Burst cards */
+    .bursts-grid { display: grid; gap: 16px; }
+    .burst-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .burst-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .burst-label { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .result-badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+    .result-badge.correct { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .result-badge.wrong   { background: rgba(239,68,68,0.12);  color: var(--red);   border: 1px solid rgba(239,68,68,0.25); }
+
+    .commentary { font-size: 14px; line-height: 1.75; color: #cbd5e1; margin-bottom: 16px; padding: 14px; background: rgba(15,23,42,0.6); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
+    .commentary.muted { color: var(--muted); border-left-color: var(--border); font-style: italic; }
+
+    .price-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .price-cell { background: rgba(15,23,42,0.5); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; text-align: center; }
+    .price-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .price-value { font-size: 15px; font-weight: 600; }
+    .price-value.positive { color: var(--green); }
+    .price-value.negative { color: var(--red); }
+    .price-value.trend-up   { color: var(--green); }
+    .price-value.trend-down { color: var(--red); }
+
+    @media (max-width: 520px) {
+      .price-row { grid-template-columns: repeat(2, 1fr); }
+      .summary-bar { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media print {
+      body { background: #fff; color: #000; }
+      .burst-card, .history-card, .summary-cell { border: 1px solid #ddd; background: #fff; }
+      .burst-shot { border-color: #ddd; background: #fff; }
+      .commentary { background: #f8fafc; border-left-color: #3b82f6; color: #1e293b; }
+      .price-cell { background: #f8fafc; border-color: #ddd; }
+      .btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="report-header">
+    <div>
+      <div class="report-title">DojiDash — Session Report</div>
+      <div class="report-meta">${escapeHtml(r.timestamp || '')} &nbsp;·&nbsp; ${totalBursts} burst${totalBursts !== 1 ? 's' : ''} analysed</div>
     </div>
+    <div class="header-actions">
+      <button class="btn" onclick="window.print()">Print / PDF</button>
+      <button class="btn" onclick="downloadJson()">Download JSON</button>
+    </div>
+  </div>
 
-    <script>
-      const report = ${JSON.stringify(r)};
-      function downloadJson() {
-        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'session-report.json';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
-    </script>
-  </body>
+  <div class="summary-bar">
+    <div class="summary-cell">
+      <div class="summary-num blue">${totalBursts}</div>
+      <div class="summary-lbl">Bursts Played</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-num green">${correct}</div>
+      <div class="summary-lbl">Correct Calls</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-num ${accuracy >= 60 ? 'green' : accuracy >= 40 ? 'blue' : 'red'}">${accuracy}%</div>
+      <div class="summary-lbl">Accuracy</div>
+    </div>
+  </div>
+
+  ${historyScript ? `
+  <div class="section-title">Market backdrop</div>
+  <div class="history-card">
+    <div class="history-text">${escapeHtml(historyScript)}</div>
+  </div>` : ''}
+
+  <div class="section-title">Reveal bursts</div>
+  <div class="bursts-grid">
+    ${burstCardsHtml || '<div class="history-card"><div class="history-text" style="color:var(--muted)">No scored bursts recorded.</div></div>'}
+  </div>
+
+</div>
+<script>
+  const report = ${JSON.stringify(r)};
+  function downloadJson() {
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'session-report.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
 </html>`;
 
     const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+    const url  = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
 }
 window.openSessionReport = openSessionReport;
+
 
 /* -----------------------------------------
    1. LOAD BLOCK FROM SUPABASE
@@ -270,6 +380,7 @@ async function loadFocusBlock() {
         clearPatternHighlights();  // focus-patterns.js
         hidePatternPanels();       // focus-patterns.js
         clearDynamicZones();       // focus-patterns.js
+        if (typeof clearOverlay === 'function') clearOverlay();  // focus-draw.js
 
         // Capture the initial 50-candle "History" moment (image + script) for the Session Report.
         try {
@@ -350,15 +461,25 @@ function initChart() {
     });
 
     setupZoneCanvas(chartDiv);   // focus-patterns.js
+
+    // ── Drawing overlay (focus-draw.js)
+    if (typeof setupOverlayCanvas === 'function') setupOverlayCanvas(chart);
 }
 
 /* -----------------------------------------
    3. RENDER CHART
 ----------------------------------------- */
 function renderChart() {
-    const all        = [...allCandles, ...revealedSoFar];
+    const all = [...allCandles, ...revealedSoFar];
     candlestickSeries.setData(all.map(toCandlePoint));   // shared/chart.js
     volumeSeries.setData(all.map(toVolumePoint));        // shared/chart.js
+
+    // Scroll to keep the latest candle visible without re-fitting the whole range.
+    // fitContent would reset the window on every reveal — scrollToRealTime preserves
+    // the rolling effect where new candles on the right push old ones off the left.
+    requestAnimationFrame(function () {
+        if (chart) chart.timeScale().scrollToRealTime();
+    });
 }
 
 /* -----------------------------------------
@@ -382,7 +503,9 @@ function resetSession() {
    5. REVEAL LOGIC
 ----------------------------------------- */
 function startAutoReveal() {
-    if (!sessionActive || autoRevealActive || awaitingGuess) return;
+    // When awaiting a guess, REVEAL submits the target price instead of revealing candles
+    if (awaitingGuess) { handleGuess(); return; }
+    if (!sessionActive || autoRevealActive) return;
     if (revealIndex >= futureCandles.length) {
         endSession("complete");
         return;
@@ -401,13 +524,12 @@ function startAutoReveal() {
             setButtonState("guess");
             showStatus("What happens next?");
 
-            // --- ADD THE NARRATOR TRIGGER HERE ---
-        if (window.runNarratorEngine) {
-            runNarratorEngine();
-        }
-        // -------------------------------------
+            // --- Trigger narrator engine (captures script even if muted) ---
+            if (typeof runNarratorEngine === 'function') {
+                runNarratorEngine();
+            }
+            // ----------------------------------------------------------------
 
-      
             return;
         }
 
@@ -427,17 +549,26 @@ function startAutoReveal() {
         } else {
             // Capture chart snapshot for non-scoring reveals (continuation candles in a burst)
             if (sessionReport && Array.isArray(sessionReport.reveals)) {
-                const revealEntry = {
-                    step:          sessionReport.reveals.length + 1,
-                    userDirection: null,
-                    userTargetPrice: null,
-                    actualPrice:   candle.close,
-                    delta:         null,
-                    isCorrect:     null,
-                    image:         null,
-                    script:        null,
-                };
-                sessionReport.reveals.push(revealEntry);
+                // Check if an entry for this candle already exists
+                let revealEntry = sessionReport.reveals.find(function(r) { 
+                    return r.candleIndex === thisIndex; 
+                });
+                
+                if (!revealEntry) {
+                    revealEntry = {
+                        candleIndex:     thisIndex,
+                        step:            sessionReport.reveals.length + 1,
+                        userDirection:   null,
+                        userTargetPrice: null,
+                        actualPrice:     candle.close,
+                        delta:           null,
+                        isCorrect:       null,
+                        image:           null,
+                        script:          null,
+                    };
+                    sessionReport.reveals.push(revealEntry);
+                }
+                
                 if (typeof window.captureSessionMoment === 'function') {
                     window.captureSessionMoment().then(function (img) { revealEntry.image = img; });
                 }
@@ -455,7 +586,6 @@ function startAutoReveal() {
 ----------------------------------------- */
 function handleGuess(guess) {
     if (!sessionActive || !awaitingGuess) return;
-    awaitingGuess = false;
 
     if (!futureCandles[revealIndex]) {
         endSession("complete");
@@ -464,23 +594,36 @@ function handleGuess(guess) {
 
     const priceInput  = document.getElementById('priceTarget');
     const targetValue = priceInput ? parseFloat(priceInput.value) : NaN;
-    if (priceInput) priceInput.value = '';
 
     const baselineClose = revealedSoFar.length > 0
         ? revealedSoFar[revealedSoFar.length - 1].close
         : allCandles[allCandles.length - 1].close;
+
+    // ── Validate target price — required input
+    if (isNaN(targetValue) || targetValue <= 0) {
+        showStatus("Enter a target price before revealing.");
+        return;   // keep awaitingGuess = true
+    }
+
+    // ── Derive direction from target vs current close
+    const derivedDirection = targetValue > baselineClose ? 'up' : 'down';
+    guess = derivedDirection;
+
+    awaitingGuess = false;
+    if (priceInput) priceInput.value = '';
+
     const finalClose = futureCandles.length > 0
         ? futureCandles[futureCandles.length - 1].close
         : baselineClose;
-    const hasTarget = !isNaN(targetValue) && targetValue > 0;
+    const hasTarget = true;   // already validated above
 
     if (!sessionReport) initSessionReport();
     if (sessionReport) {
-        sessionReport.prediction.guess        = guess;
-        sessionReport.prediction.target       = hasTarget ? targetValue : null;
-        sessionReport.prediction.actualPrice  = finalClose;
-        sessionReport.prediction.isCorrect    = (guess === 'up' && finalClose > baselineClose) || (guess === 'down' && !(finalClose > baselineClose));
-        sessionReport.prediction.accuracyDelta = hasTarget ? Math.abs(targetValue - finalClose) : null;
+        sessionReport.prediction.guess         = derivedDirection;
+        sessionReport.prediction.target        = targetValue;
+        sessionReport.prediction.actualPrice   = finalClose;
+        sessionReport.prediction.isCorrect     = (derivedDirection === 'up' && finalClose > baselineClose) || (derivedDirection === 'down' && !(finalClose > baselineClose));
+        sessionReport.prediction.accuracyDelta = Math.abs(targetValue - finalClose);
         console.log('[SessionReport]', sessionReport);
     }
 
@@ -496,8 +639,14 @@ function handleGuess(guess) {
         baseClose:    baselineClose,
     };
 
-    showStatus("Reveal to see if you were right!");
+    // Expose for focus-narate.js so the narrator attaches the script to the right burst entry
+    window._pendingBurstEndIndex = burstEndIndex;
+
+    showStatus("Revealing…");
     setButtonState("reveal");
+
+    // Single press: prediction is locked — immediately start the reveal burst
+    startAutoReveal();
 }
 
 /* -----------------------------------------
@@ -517,19 +666,34 @@ function scorePendingPrediction() {
     // ── Capture decision to session report (per reveal)
     if (sessionReport && Array.isArray(sessionReport.reveals)) {
         const actualPrice = predictedCandle.close;
-        const hasTarget   = !isNaN(targetPrice) && targetPrice > 0;
-        const delta       = hasTarget ? (actualPrice - targetPrice) : null;
-        const revealEntry = {
-            step:          sessionReport.reveals.length + 1,
-            userDirection: guess,
-            userTargetPrice: hasTarget ? targetPrice : null,
-            actualPrice:   actualPrice,
-            delta:         delta,
-            isCorrect:     correct,
-            image:         null,
-            script:        null,
-        };
-        sessionReport.reveals.push(revealEntry);
+        const delta       = actualPrice - targetPrice;   // targetPrice always present now
+        
+        // Find the reveal entry for this candleIndex, or create a new one
+        let revealEntry = sessionReport.reveals.find(function(r) { 
+            return r.candleIndex === candleIndex; 
+        });
+        
+        if (!revealEntry) {
+            revealEntry = {
+                candleIndex:     candleIndex,
+                step:            sessionReport.reveals.length + 1,
+                userDirection:   guess,
+                userTargetPrice: targetPrice,
+                actualPrice:     actualPrice,
+                delta:           delta,
+                isCorrect:       correct,
+                image:           null,
+                script:          null,
+            };
+            sessionReport.reveals.push(revealEntry);
+        } else {
+            revealEntry.userDirection   = guess;
+            revealEntry.userTargetPrice = targetPrice;
+            revealEntry.actualPrice     = actualPrice;
+            revealEntry.delta           = delta;
+            revealEntry.isCorrect       = correct;
+        }
+        
         if (typeof window.captureSessionMoment === 'function') {
             window.captureSessionMoment().then(function (img) { revealEntry.image = img; });
         }
@@ -545,9 +709,8 @@ function scorePendingPrediction() {
         showWSBPopup(false);
     }
 
-    // ── Price target feedback
-    const hasTarget = !isNaN(targetPrice) && targetPrice > 0;
-    if (hasTarget) {
+    // ── Price target feedback (targetPrice always present)
+    {
         const actual  = predictedCandle.close;
         const diff    = actual - targetPrice;
         const diffPct = ((Math.abs(diff) / actual) * 100).toFixed(1);
@@ -576,9 +739,137 @@ function scorePendingPrediction() {
 }
 
 /* -----------------------------------------
+   6c. BUILD FINAL SESSION REPORT
+   Silent. No popup. No download.
+   Computes cognitiveSnapshot + cognitiveStatements,
+   attaches them to sessionReport, and stores the
+   complete object in window.finalSessionReport.
+   Called automatically at the top of endSession().
+----------------------------------------- */
+function buildFinalSessionReport() {
+    if (!sessionReport) return;
+
+    const reveals = Array.isArray(sessionReport.reveals) ? sessionReport.reveals : [];
+    const bursts  = reveals.filter(b => b && b.userTargetPrice != null && b.actualPrice != null && b.delta != null);
+
+    if (bursts.length === 0) {
+        sessionReport.cognitiveSnapshot   = null;
+        sessionReport.cognitiveStatements = null;
+        window.finalSessionReport = JSON.parse(JSON.stringify(sessionReport));
+        return;
+    }
+
+    // ── Helper: compute cognitive fields for a single burst
+    function burstCognition(b) {
+        const delta  = +b.delta;
+        const pctDev = Math.abs(delta) / +b.actualPrice * 100;
+
+        // directionalExpectation — from userDirection only (target vs baseClose, user belief)
+        const directionalExpectation = b.userDirection === 'up' ? 'Positive' : 'Negative';
+
+        // optimismPessimism — from delta only (target vs actual, outcome)
+        // delta = actual - target → delta < 0 means target was above actual = Optimistic
+        const optimismPessimism = delta < 0 ? 'Optimistic' : delta > 0 ? 'Pessimistic' : 'Neutral';
+
+        // overshootUndershoot — two-tier: direction from delta sign, magnitude from pctDev
+        // delta < 0 → Overshoot (aimed above actual), delta > 0 → Undershoot (aimed below actual)
+        let overshootUndershoot;
+        if (pctDev < 1) {
+            overshootUndershoot = 'Accurate';
+        } else {
+            const direction = delta < 0 ? 'Overshoot' : 'Undershoot';
+            const magnitude = pctDev < 3 ? 'Mild' : pctDev < 7 ? 'Moderate' : 'Strong';
+            overshootUndershoot = `${magnitude} ${direction}`;
+        }
+
+        // magnitudeCalibration — magnitude only, from abs(delta)/actual
+        const magnitudeCalibration = pctDev < 2 ? 'Tight' : pctDev < 5 ? 'Moderate' : 'Loose';
+
+        // directionalCalibration — from delta only (how target compared to actual)
+        const directionalCalibration = delta < 0 ? 'Aimed Too High' : delta > 0 ? 'Aimed Too Low' : 'Aligned';
+
+        // burstBias — single-burst equivalent of systematicBias; no "Consistent" at burst level
+        const burstBias = delta < 0 ? 'Overshooter' : delta > 0 ? 'Undershooter' : 'Balanced';
+
+        return {
+            snapshot: { directionalExpectation, optimismPessimism, overshootUndershoot, magnitudeCalibration, directionalCalibration, burstBias },
+            statements: {
+                biasSummary:
+                    `The target reflected a ${directionalExpectation} expectation for the move. ` +
+                    `The target was overall ${optimismPessimism} relative to the actual outcome. ` +
+                    `The target showed a ${overshootUndershoot} tendency based on percentage deviation.`,
+                calibrationSummary:
+                    `Calibration was ${magnitudeCalibration}, based on the distance from actual price. ` +
+                    `Directionally, the target tended to be ${directionalCalibration}. ` +
+                    `For this burst, the user was an ${burstBias}.`,
+            },
+        };
+    }
+
+    // ── Attach per-burst cognitive data directly onto each reveal entry
+    bursts.forEach(b => {
+        const cog = burstCognition(b);
+        b.cognitiveSnapshot   = cog.snapshot;
+        b.cognitiveStatements = cog.statements;
+    });
+
+    // ── Session-level aggregates
+    const totalAbsDelta  = bursts.reduce((s, b) => s + Math.abs(b.delta), 0);
+    const totalActual    = bursts.reduce((s, b) => s + b.actualPrice, 0);
+    const sumDelta       = bursts.reduce((s, b) => s + b.delta, 0);
+    const avgAbsDelta    = totalAbsDelta / bursts.length;
+    const avgActual      = totalActual   / bursts.length;
+    const meanDelta      = sumDelta      / bursts.length;
+    const avgAbsDeltaPct = (avgAbsDelta  / avgActual) * 100;
+
+    // directionalExpectation — majority of userDirection values (expectation, not outcome)
+    const positiveCount       = bursts.filter(b => b.userDirection === 'up').length;
+    const directionalExpectation = positiveCount >= (bursts.length - positiveCount) ? 'Positive' : 'Negative';
+
+    // optimismPessimism — majority of delta signs (outcome, not expectation)
+    const optimisticCount    = bursts.filter(b => b.delta < 0).length;
+    const pessimisticCount   = bursts.length - optimisticCount;
+    const optimismPessimism  = optimisticCount === pessimisticCount ? 'Neutral'
+        : optimisticCount > pessimisticCount ? 'Optimistic' : 'Pessimistic';
+
+    // overshootUndershoot — two-tier using meanDelta sign + avgPctDev magnitude
+    const avgPctDev = bursts.reduce((s, b) => s + (Math.abs(b.delta) / b.actualPrice * 100), 0) / bursts.length;
+    let overshootUndershoot;
+    if (avgPctDev < 1) {
+        overshootUndershoot = 'Accurate';
+    } else {
+        const direction = meanDelta < 0 ? 'Overshoot' : 'Undershoot';
+        const magnitude = avgPctDev < 3 ? 'Mild' : avgPctDev < 7 ? 'Moderate' : 'Strong';
+        overshootUndershoot = `${magnitude} ${direction}`;
+    }
+
+    // magnitudeCalibration — avg magnitude only
+    const magnitudeCalibration   = avgAbsDeltaPct < 2 ? 'Tight' : avgAbsDeltaPct < 5 ? 'Moderate' : 'Loose';
+
+    // directionalCalibration — from meanDelta only
+    const directionalCalibration = meanDelta < 0 ? 'Aimed Too High' : meanDelta > 0 ? 'Aimed Too Low' : 'Aligned';
+
+    // systematicBias — session-level only; "Consistent" is valid here across multiple bursts
+    const systematicBias = meanDelta < 0 ? 'Consistent Overshooter' : meanDelta > 0 ? 'Consistent Undershooter' : 'Balanced';
+
+    sessionReport.cognitiveSnapshot = {
+        directionalExpectation, optimismPessimism, overshootUndershoot,
+        magnitudeCalibration, directionalCalibration, systematicBias,
+    };
+    sessionReport.cognitiveStatements = null; // statements live per-burst
+
+    // ── STORE as single source of truth
+    window.finalSessionReport = JSON.parse(JSON.stringify(sessionReport));
+}
+window.buildFinalSessionReport = buildFinalSessionReport;
+
+/* -----------------------------------------
    7. END SESSION
 ----------------------------------------- */
 function endSession(reason) {
+    // ── Freeze and enrich the report before any UI changes
+    buildFinalSessionReport();
+
     sessionActive    = false;
     autoRevealActive = false;
     awaitingGuess    = false;
@@ -621,13 +912,9 @@ function endSession(reason) {
 }
 
 /* -----------------------------------------
-   8. KEYBOARD SHORTCUTS (Phase 5)
-   ArrowUp = UP guess, ArrowDown = DOWN guess
+   8. KEYBOARD SHORTCUTS
+   (Up/Down direction is now derived from target price — no key shortcuts needed)
 ----------------------------------------- */
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowUp')   { e.preventDefault(); handleGuess('up');   }
-    if (e.key === 'ArrowDown') { e.preventDefault(); handleGuess('down'); }
-});
 
 /* -----------------------------------------
    9. BOOT
@@ -638,10 +925,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── Bind button listeners
     const el = id => document.getElementById(id);
-    if (el('narratorBtn')) el('narratorBtn').addEventListener('click', toggleNarrator);
+    if (el('narratorBtn'))             el('narratorBtn').addEventListener('click', toggleNarrator);
     if (el('revealBtn'))               el('revealBtn').addEventListener('click', startAutoReveal);
-    if (el('upBtn'))                   el('upBtn').addEventListener('click', () => handleGuess('up'));
-    if (el('downBtn'))                 el('downBtn').addEventListener('click', () => handleGuess('down'));
     if (el('togglePatternsBtn'))       el('togglePatternsBtn').addEventListener('click', togglePatterns);
     if (el('togglePatternExplainBtn')) el('togglePatternExplainBtn').addEventListener('click', togglePatternExplain);
     if (el('summaryToggleBtn'))        el('summaryToggleBtn').addEventListener('click', toggleSummary);
